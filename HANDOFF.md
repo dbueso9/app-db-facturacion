@@ -1,15 +1,20 @@
 # HANDOFF — DB Consulting Facturación
 
 ## Estado actual
-App de facturación funcional y lista para uso. Build de producción pasa sin errores ni advertencias.
+App de facturación en producción, completamente migrada a Supabase Postgres y desplegada en Vercel.
+
+**Producción:** https://db-consulting-facturas.vercel.app
+**Repositorio:** https://github.com/dbueso9/app-db-facturacion
 
 ---
 
 ## Stack
 - **Framework:** Next.js 16.2 (App Router, Turbopack)
 - **UI:** shadcn/ui con **Base UI** (no Radix UI) + Tailwind CSS v4
-- **Persistencia:** `localStorage` — sin backend, sin base de datos
+- **Persistencia:** Supabase Postgres (proyecto `bekolkmrxxbygbqauotb`)
+- **Deploy:** Vercel (equipo `dbueso9s-projects`) — auto-deploy en cada push a `main`
 - **Forms:** React Hook Form + Zod
+- **PDF:** html2canvas + jsPDF
 - **Modo:** Dark mode fijo (clase `dark` en `<html>`)
 
 > **IMPORTANTE:** Los componentes Button y Select son de Base UI.
@@ -23,20 +28,65 @@ App de facturación funcional y lista para uso. Build de producción pasa sin er
 ```
 src/
 ├── lib/
-│   ├── empresa.ts      # Datos fiscales fijos (CAI, RTN, rangos, ISV)
-│   ├── types.ts        # Tipos TypeScript (Factura, Cliente, Servicio, etc.)
-│   ├── store.ts        # CRUD sobre localStorage
-│   └── utils.ts        # formatLempiras, formatFecha, generarId
+│   ├── supabase.ts         # createServerClient() con service_role key
+│   ├── actions/
+│   │   ├── clientes.ts     # Server Actions: getClientes, saveCliente, deleteCliente
+│   │   ├── facturas.ts     # Server Actions: getFacturas, getFactura, saveFactura,
+│   │   │                   #   updateEstadoFactura, deleteFactura, crearNumeroFactura
+│   │   └── servicios.ts    # Server Actions: getServicios, saveServicio, deleteServicio
+│   ├── empresa.ts          # Datos fiscales fijos (CAI, RTN, rangos, ISV)
+│   ├── types.ts            # Tipos TypeScript (Factura, Cliente, Servicio, etc.)
+│   └── utils.ts            # formatLempiras, formatFecha, generarId
 ├── components/
-│   └── navbar.tsx      # Navegación sticky con logo
+│   └── navbar.tsx          # Navegación sticky con logo
 └── app/
-    ├── page.tsx              # Dashboard
+    ├── page.tsx                    # Server component → DashboardClient
+    ├── dashboard-client.tsx        # Dashboard con métricas
     ├── facturas/
-    │   ├── page.tsx          # Lista de facturas con búsqueda/filtro
-    │   ├── nueva/page.tsx    # Formulario de nueva factura
-    │   └── [id]/page.tsx     # Vista de factura + impresión
-    ├── clientes/page.tsx     # CRUD de clientes
-    └── servicios/page.tsx    # Catálogo de servicios
+    │   ├── page.tsx                # Server component → FacturasClient
+    │   ├── facturas-client.tsx     # Lista con búsqueda, filtro estado/fecha, paginación
+    │   ├── nueva/
+    │   │   ├── page.tsx            # Server component → NuevaFacturaClient
+    │   │   └── nueva-client.tsx    # Formulario de nueva factura
+    │   └── [id]/
+    │       ├── page.tsx            # Server component → FacturaDetalleClient
+    │       ├── factura-detalle-client.tsx  # Vista + controles + PDF
+    │       └── editar/
+    │           ├── page.tsx        # Server component (redirige si no es borrador)
+    │           └── editar-client.tsx  # Formulario de edición
+    ├── clientes/
+    │   ├── page.tsx                # Server component → ClientesClient
+    │   └── clientes-client.tsx     # CRUD de clientes
+    └── servicios/
+        ├── page.tsx                # Server component → ServiciosClient
+        └── servicios-client.tsx    # Catálogo de servicios
+```
+
+---
+
+## Base de datos (Supabase)
+
+Tablas con prefijo `dbc_` para aislamiento dentro del proyecto Supabase compartido:
+
+| Tabla | Descripción |
+|---|---|
+| `dbc_clientes` | Clientes con RTN, dirección, correo, teléfono |
+| `dbc_servicios` | Catálogo de servicios con precio base y categoría |
+| `dbc_facturas` | Facturas con `cliente_data` JSONB (snapshot histórico) |
+| `dbc_lineas_factura` | Líneas de factura con FK a `dbc_facturas` (CASCADE DELETE) |
+
+El esquema completo está en `schema.sql` en la raíz del proyecto.
+
+---
+
+## Variables de entorno
+
+Configuradas en Vercel (producción) y en `.env.local` (desarrollo):
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://bekolkmrxxbygbqauotb.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
 ---
@@ -57,51 +107,39 @@ src/
 
 ---
 
-## Numeración de facturas
-- Secuencia inicia en `101`, termina en `150` (50 facturas disponibles)
-- Función: `crearNumeroFactura()` en `store.ts`
-- Formato: `N.000-001-04-XXXXXXXX`
-- Las facturas **anuladas NO consumen** número de secuencia (se recalcula el máximo)
-- La app muestra alerta cuando quedan ≤ 10 facturas disponibles en el rango
-
----
-
 ## Funcionalidades implementadas
+
 - [x] Dashboard con métricas (total facturado, cobrado, pendientes, CAI disponible)
-- [x] Lista de facturas con búsqueda y filtro por estado
+- [x] Lista de facturas con búsqueda, filtro por estado, filtro por rango de fechas y paginación (10/página)
 - [x] Crear factura con selector de cliente, catálogo de servicios, líneas libres
 - [x] ISV 15% calculado automáticamente en tiempo real
 - [x] Vista de factura imprimible (Ctrl+P / botón Imprimir) — header/navbar se ocultan al imprimir
+- [x] Exportar factura a PDF descargable (html2canvas + jsPDF)
 - [x] Cambiar estado de factura: Borrador / Emitida / Pagada / Anulada
+- [x] AlertDialog de confirmación antes de anular una factura
+- [x] Botón Eliminar factura con AlertDialog de confirmación → redirige a `/facturas`
+- [x] Editar factura en estado borrador (`/facturas/[id]/editar`)
 - [x] CRUD completo de clientes (con RTN, dirección, correo, teléfono)
 - [x] Catálogo de servicios con 6 servicios precargados
 - [x] Logo `Logo DB.png` integrado en navbar y en documento de factura
 - [x] Datos CAI visibles en dashboard y en pie de factura imprimible
+- [x] Alerta cuando quedan ≤ 10 facturas disponibles en el rango CAI
 
 ---
 
 ## Pendientes / Mejoras sugeridas
 
-### Prioritarias
-- [ ] **Exportar factura a PDF** — actualmente solo imprime. Integrar `@react-pdf/renderer` o `jspdf` para generar PDF descargable
-- [ ] **Botón Eliminar factura** en la vista `[id]` — actualmente `deleteFactura` existe en store pero no hay UI para llamarlo
-- [ ] **Confirmación antes de anular** — usar `AlertDialog` de shadcn cuando se cambia estado a "anulada"
-
 ### Mejoras UX
-- [ ] **Editar factura** en estado borrador — actualmente no se puede editar una vez creada
-- [ ] **Paginación** en lista de facturas para cuando crezca el volumen
 - [ ] **Exportar datos a JSON/Excel** — backup de clientes y facturas
-- [ ] **Filtro por fecha** en lista de facturas
 - [ ] **Resumen por cliente** — cuánto se le ha facturado a cada cliente
 
-### Infraestructura (si se quiere persistencia real)
-- [ ] Migrar de `localStorage` a base de datos (Neon Postgres vía Vercel Marketplace recomendado)
-- [ ] Autenticación básica (Clerk vía Vercel Marketplace)
-- [ ] Deploy en Vercel (`vercel deploy`)
+### Infraestructura
+- [ ] **Autenticación** (Clerk vía Vercel Marketplace) — actualmente la app es pública
+- [ ] **Nuevo CAI** — cuando se agote el rango actual, actualizar `empresa.ts` con el nuevo
 
 ---
 
-## Cómo retomar
+## Cómo retomar desarrollo
 ```bash
 cd "db-consulting-facturas"
 npm run dev
@@ -110,8 +148,9 @@ npm run dev
 
 ## Cómo hacer deploy
 ```bash
-npm install -g vercel
-vercel deploy --prod
+git push  # Vercel despliega automáticamente desde main
+# O manualmente:
+vercel deploy --prod --scope dbueso9s-projects
 ```
 
 ---
@@ -121,11 +160,14 @@ vercel deploy --prod
 |---|---|
 | Build de producción (`npm run build`) | ✅ Sin errores |
 | TypeScript (`tsc --noEmit`) | ✅ Sin errores |
-| Todas las rutas generan sin error | ✅ |
-| Import no utilizado (`Link` en `[id]/page`) | ✅ Corregido |
-| `onValueChange` null-safe en Select de servicios | ✅ Corregido |
-| Select de catálogo se resetea tras seleccionar | ✅ Corregido |
-| Logo `Logo DB.png` en navbar y factura | ✅ |
-| ISV 15% calculado correctamente | ✅ |
-| Numeración CAI respeta el rango autorizado | ✅ |
-| Vista de impresión oculta navbar y controles | ✅ |
+| Todas las rutas dinámicas en Vercel | ✅ |
+| Migración localStorage → Supabase | ✅ |
+| Server Actions (clientes, facturas, servicios) | ✅ |
+| Deploy en Vercel con variables de entorno | ✅ |
+| Schema SQL ejecutado en Supabase | ✅ |
+| Eliminar factura con confirmación | ✅ |
+| AlertDialog al anular factura | ✅ |
+| Editar factura en borrador | ✅ |
+| Exportar PDF (html2canvas + jsPDF) | ✅ |
+| Filtro por fecha en lista de facturas | ✅ |
+| Paginación (10 por página) | ✅ |
