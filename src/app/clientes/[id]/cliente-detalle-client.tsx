@@ -13,7 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { saveContrato, deleteContrato, toggleContratoActivo, calcularMontoContrato, descripcionFacturaContrato } from "@/lib/actions/contratos";
+import { saveContrato, deleteContrato, toggleContratoActivo } from "@/lib/actions/contratos";
+import { calcularMontoContrato, descripcionFacturaContrato } from "@/lib/contratos-utils";
 import { crearNumeroFactura, saveFactura } from "@/lib/actions/facturas";
 import { enviarFacturasAgrupadas } from "@/lib/actions/email";
 import { Cliente, Contrato, TipoContrato, Factura } from "@/lib/types";
