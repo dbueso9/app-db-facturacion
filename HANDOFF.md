@@ -229,6 +229,15 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 ---
 
+## Regla crítica de arquitectura — Turbopack
+
+> **Funciones síncronas exportadas desde `"use server"` fallan en Turbopack.**
+> Toda función pura (sin async, sin acceso a BD) que deba usarse en componentes client
+> debe vivir en un archivo SIN directiva `"use server"`.
+> Ejemplo: `src/lib/contratos-utils.ts` contiene `calcularMontoContrato` y `descripcionFacturaContrato`.
+
+---
+
 ## Pendiente de implementar (próximas fases)
 
 ### ✅ Fase 5 — Reportería y Dashboard por Servicio (2026-04-21)
@@ -315,3 +324,5 @@ git push  # Vercel despliega automáticamente desde main
 | Migraciones SQL Supabase | 2026-04-21 | ✅ |
 | Variables de entorno Vercel (RESEND_API_KEY, NEXT_PUBLIC_APP_URL) | 2026-04-21 | ✅ |
 | Reportería Fase 5 (dashboard + /reportes) | 2026-04-21 | ✅ |
+| Fix build Turbopack: calcularMontoContrato fuera de use server | 2026-04-21 | ✅ |
+| Cotizaciones Fase 6 (COT-XXX, convertir a factura) | 2026-04-21 | ✅ |
