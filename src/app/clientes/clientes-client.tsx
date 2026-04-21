@@ -54,6 +54,19 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
     if (formErrors.rtn) setFormErrors({ ...formErrors, rtn: undefined });
   }
 
+  function handleTelefono(raw: string) {
+    const digits = raw.replace(/\D/g, "");
+    // Strip leading 504 if user typed it
+    const core = (digits.startsWith("504") ? digits.slice(3) : digits).slice(0, 8);
+    let formatted = "";
+    if (core.length > 0) {
+      formatted = "+504 " + core.slice(0, 4);
+      if (core.length > 4) formatted += "-" + core.slice(4);
+    }
+    setForm({ ...form, telefono: formatted });
+    if (formErrors.telefono) setFormErrors({ ...formErrors, telefono: undefined });
+  }
+
   async function guardar() {
     const errs: FormErrors = {};
     if (!form.nombre.trim()) errs.nombre = "El nombre es requerido";
@@ -67,6 +80,7 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
     if (!form.correo.trim()) errs.correo = "El correo es requerido";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo)) errs.correo = "Correo inválido";
     if (!form.telefono.trim()) errs.telefono = "El teléfono es requerido";
+    else if (!/^\+504 \d{4}-\d{4}$/.test(form.telefono)) errs.telefono = "Formato requerido: +504 XXXX-XXXX";
 
     if (Object.keys(errs).length > 0) { setFormErrors(errs); return; }
 
@@ -227,8 +241,9 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
                 <Label>Teléfono *</Label>
                 <Input
                   value={form.telefono}
-                  onChange={(e) => { setForm({ ...form, telefono: e.target.value }); if (formErrors.telefono) setFormErrors({ ...formErrors, telefono: undefined }); }}
-                  placeholder="504 XXXXXXXX"
+                  onChange={(e) => handleTelefono(e.target.value)}
+                  placeholder="+504 XXXX-XXXX"
+                  inputMode="tel"
                   className={formErrors.telefono ? "border-red-500" : ""}
                 />
                 <FieldError msg={formErrors.telefono} />

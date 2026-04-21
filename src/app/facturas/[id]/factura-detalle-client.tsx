@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Printer, Trash2, Download, Pencil, Send, CheckCircle, XCircle } from "lucide-react";
 import Link from "next/link";
-import jsPDF from "jspdf";
+import { jsPDF } from "jspdf";
 
 const BADGE_ESTADO: Record<EstadoFactura, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   borrador: { label: "Borrador", variant: "secondary" },
@@ -42,6 +42,7 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
   const [cambiando, setCambiando] = useState(false);
   const [eliminando, setEliminando] = useState(false);
   const [exportandoPdf, setExportandoPdf] = useState(false);
+  const [errorPdf, setErrorPdf] = useState<string | null>(null);
   const [modalEmail, setModalEmail] = useState(false);
   const [emailPara, setEmailPara] = useState(factura.cliente.correo || "");
   const [emailAsunto, setEmailAsunto] = useState(
@@ -107,11 +108,18 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
 
   async function exportarPDF() {
     setExportandoPdf(true);
+    setErrorPdf(null);
     try {
       const html2canvas = (await import("html2canvas")).default;
       const el = document.getElementById("factura-documento");
-      if (!el) return;
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+      if (!el) { setErrorPdf("No se encontró el documento"); return; }
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pdfW = pdf.internal.pageSize.getWidth();
@@ -123,6 +131,8 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
         factura.fecha,
       ].map((s) => s.replace(/[/\\?%*:|"<>]/g, "-").trim());
       pdf.save(`${partes.join(" - ")}.pdf`);
+    } catch (err) {
+      setErrorPdf(err instanceof Error ? err.message : "Error al generar PDF");
     } finally {
       setExportandoPdf(false);
     }
@@ -176,6 +186,13 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
           </Button>
         </div>
       </div>
+
+      {errorPdf && (
+        <div className="print:hidden mb-4 flex items-center gap-2 bg-red-950 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm">
+          <XCircle className="h-4 w-4 shrink-0" />
+          {errorPdf}
+        </div>
+      )}
 
       {/* Documento de factura */}
       <div id="factura-documento" className="bg-white text-black max-w-3xl mx-auto p-10 shadow-lg print:shadow-none print:p-6 rounded-lg">
@@ -264,11 +281,6 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
               </div>
             )}
           </div>
-          {!factura.cliente.rtn && (
-            <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-              ⚠ La factura sin RTN del adquiriente no genera crédito fiscal
-            </p>
-          )}
         </div>
 
         {/* Tabla de servicios */}
@@ -343,9 +355,9 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
           </div>
         )}
 
-        {/* Aviso fiscal SAR */}
-        <div className="text-xs text-center text-gray-500 italic border border-gray-200 rounded px-3 py-2 mb-4">
-          La factura sin RTN del adquiriente no genera crédito fiscal
+        {/* Leyenda fiscal */}
+        <div className="text-xs text-center font-bold text-gray-800 border border-gray-800 rounded px-3 py-2 mb-4 uppercase tracking-wide">
+          LA FACTURA ES BENEFICIO DE TODOS EXÍJALA
         </div>
 
         {/* Footer CAI / datos fiscales SAR */}

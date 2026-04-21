@@ -15,7 +15,7 @@ const METODO_LABEL: Record<string, string> = {
   efectivo: "Efectivo",
 };
 
-export function generarHtmlFactura(factura: Factura, appUrl = ""): string {
+export function generarHtmlFactura(factura: Factura): string {
   const lineas = factura.lineas
     .map(
       (l) => `
@@ -27,14 +27,6 @@ export function generarHtmlFactura(factura: Factura, appUrl = ""): string {
       </tr>`
     )
     .join("");
-
-  const linkBtn = appUrl
-    ? `<div style="text-align:center;margin:24px 0">
-        <a href="${appUrl}/facturas/${factura.id}" style="background:#111827;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">
-          Ver Factura en el Sistema
-        </a>
-      </div>`
-    : "";
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -89,9 +81,6 @@ export function generarHtmlFactura(factura: Factura, appUrl = ""): string {
           <p style="margin:2px 0 0;font-size:14px">${factura.cliente.direccion}</p>
         </div>` : ""}
       </div>
-      ${!factura.cliente.rtn ? `<p style="margin:12px 0 0;font-size:11px;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:4px;padding:6px 10px">
-        ⚠ La factura sin RTN del adquiriente no genera crédito fiscal
-      </p>` : ""}
     </div>
 
     <!-- Tabla de servicios -->
@@ -127,12 +116,10 @@ export function generarHtmlFactura(factura: Factura, appUrl = ""): string {
       </div>
     </div>
 
-    ${linkBtn}
-
     <!-- Footer CAI -->
     <div style="padding:20px 40px;background:#f8fafc;border-top:1px solid #e5e7eb">
-      <p style="margin:0;font-size:11px;text-align:center;color:#6b7280;font-style:italic">
-        La factura sin RTN del adquiriente no genera crédito fiscal
+      <p style="margin:0;font-size:13px;font-weight:700;text-align:center;color:#111827;letter-spacing:.5px;text-transform:uppercase">
+        LA FACTURA ES BENEFICIO DE TODOS EXÍJALA
       </p>
       <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:11px;color:#9ca3af">
         <span><strong>CAI:</strong> ${EMPRESA.cai}</span>
@@ -142,7 +129,10 @@ export function generarHtmlFactura(factura: Factura, appUrl = ""): string {
         <span>Rango: N.${EMPRESA.rangoDesde} al N.${EMPRESA.rangoHasta}</span>
         ${factura.tasaCambio ? `<span>Tasa BCH: L.${factura.tasaCambio.toFixed(4)}/USD</span>` : ""}
       </div>
-      <p style="margin:12px 0 0;font-size:10px;text-align:center;color:#cbd5e1">
+      <p style="margin:12px 0 0;font-size:11px;text-align:center;color:#9ca3af">
+        ${EMPRESA.nombre} · RTN ${EMPRESA.rtn} · ${EMPRESA.correo} · Tel: ${EMPRESA.telefono}
+      </p>
+      <p style="margin:6px 0 0;font-size:10px;text-align:center;color:#cbd5e1">
         Sistema de Facturación desarrollado por DB Consulting © ${new Date().getFullYear()}
       </p>
     </div>
