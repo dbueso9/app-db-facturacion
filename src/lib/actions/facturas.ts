@@ -82,7 +82,7 @@ export async function crearNumeroFactura(): Promise<{ secuencia: number; numero:
 export async function saveFactura(factura: Factura): Promise<void> {
   const supabase = createServerClient();
 
-  const { error: facturaError } = await supabase.from("dbc_facturas").upsert({
+  const payloadBase = {
     id: factura.id,
     numero: factura.numero,
     secuencia: factura.secuencia,
@@ -95,12 +95,23 @@ export async function saveFactura(factura: Factura): Promise<void> {
     total: factura.total,
     estado: factura.estado,
     metodo_pago: factura.metodoPago || null,
-    condicion_pago: factura.condicionPago || null,
     tasa_cambio: factura.tasaCambio || null,
     nombre_proyecto: factura.nombreProyecto || null,
     notas: factura.notas,
     creada_en: factura.creadaEn,
+  };
+
+  // Intentar guardar con condicion_pago; si la columna no existe aún, guardar sin ella
+  let { error: facturaError } = await supabase.from("dbc_facturas").upsert({
+    ...payloadBase,
+    condicion_pago: factura.condicionPago ?? null,
   });
+
+  if (facturaError?.message?.includes("condicion_pago")) {
+    const { error: retryError } = await supabase.from("dbc_facturas").upsert(payloadBase);
+    facturaError = retryError;
+  }
+
   if (facturaError) throw facturaError;
 
   // Delete existing lines then insert new ones
