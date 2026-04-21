@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Cotizacion, EstadoCotizacion } from "@/lib/types";
-import { formatLempiras, formatFecha } from "@/lib/utils";
+import { formatDolares, formatFecha } from "@/lib/utils";
 import { Plus, FileText, Search, CheckCircle } from "lucide-react";
 
 const BADGE_ESTADO: Record<EstadoCotizacion, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -69,7 +69,7 @@ export default function CotizacionesClient({ cotizaciones }: { cotizaciones: Cot
             <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
               <CheckCircle className="h-3 w-3" /> Monto Aceptado
             </p>
-            <p className="text-2xl font-bold mt-1 font-mono text-green-400">{formatLempiras(totales.montoAceptado)}</p>
+            <p className="text-2xl font-bold mt-1 font-mono text-green-400">{formatDolares(totales.montoAceptado)}</p>
           </CardContent>
         </Card>
       </div>
@@ -125,7 +125,7 @@ export default function CotizacionesClient({ cotizaciones }: { cotizaciones: Cot
                         <span className="text-xs text-green-400 font-medium">→ Facturada</span>
                       )}
                       <Badge variant={estado.variant}>{estado.label}</Badge>
-                      <span className="text-sm font-mono font-semibold w-28 text-right">{formatLempiras(c.total)}</span>
+                      <span className="text-sm font-mono font-semibold w-28 text-right">{formatDolares(c.total)}</span>
                     </div>
                   </Link>
                 );

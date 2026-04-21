@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray, Resolver } from "react-hook-form";
+import { useForm, useFieldArray, Controller, Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { crearNumeroCotizacion, saveCotizacion } from "@/lib/actions/cotizaciones";
 import { Cliente, Servicio, Cotizacion } from "@/lib/types";
-import { formatLempiras, generarId } from "@/lib/utils";
+import { formatDolares, generarId } from "@/lib/utils";
 import { EMPRESA } from "@/lib/empresa";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
 
@@ -69,8 +69,7 @@ export default function NuevaCotizacionClient({
   const isv = subtotal * EMPRESA.isv;
   const total = subtotal + isv;
 
-  function onClienteChange(id: string | null) {
-    if (!id) return;
+  function onClienteChange(id: string) {
     const c = clientes.find((c) => c.id === id);
     setClienteSeleccionado(c || null);
     setValue("clienteId", id);
@@ -82,6 +81,11 @@ export default function NuevaCotizacionClient({
     if (!s) return;
     append({ descripcion: s.nombre, cantidad: 1, precioUnitario: s.precioBase });
     setCatalogoKey((k) => k + 1);
+  }
+
+  function onDescripcionChange(idx: number, value: string) {
+    const matched = servicios.find((s) => s.nombre.toLowerCase() === value.toLowerCase());
+    if (matched) setValue(`lineas.${idx}.precioUnitario`, matched.precioBase);
   }
 
   async function onSubmit(data: FormValues) {
@@ -126,6 +130,10 @@ export default function NuevaCotizacionClient({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <datalist id="srv-list-nueva">
+        {servicios.map((s) => <option key={s.id} value={s.nombre} />)}
+      </datalist>
+
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
@@ -142,24 +150,29 @@ export default function NuevaCotizacionClient({
             <CardTitle className="text-base">Datos del Cliente</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <input type="hidden" {...register("clienteId")} />
             <div className="space-y-1">
               <Label>Cliente *</Label>
-              <Select onValueChange={onClienteChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Seleccione un cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clientes.length === 0 ? (
-                    <SelectItem value="_none" disabled>No hay clientes — cree uno primero</SelectItem>
-                  ) : (
-                    clientes.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nombre}{c.rtn ? ` — RTN: ${c.rtn}` : ""}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <Controller
+                control={control}
+                name="clienteId"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={(val) => { if (!val) return; field.onChange(val); onClienteChange(val); }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Seleccione un cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientes.length === 0 ? (
+                        <SelectItem value="_none" disabled>No hay clientes — cree uno primero</SelectItem>
+                      ) : (
+                        clientes.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               {errors.clienteId && <p className="text-destructive text-xs">{errors.clienteId.message}</p>}
             </div>
 
@@ -196,7 +209,7 @@ export default function NuevaCotizacionClient({
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Servicios / Productos</CardTitle>
+            <CardTitle className="text-base">Servicios / Productos (USD)</CardTitle>
             {servicios.length > 0 && (
               <Select key={catalogoKey} onValueChange={agregarServicioCatalogo}>
                 <SelectTrigger className="w-48">
@@ -214,7 +227,7 @@ export default function NuevaCotizacionClient({
             <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
               <span className="col-span-5">Descripción</span>
               <span className="col-span-2 text-center">Cantidad</span>
-              <span className="col-span-3 text-right">Precio Unit.</span>
+              <span className="col-span-3 text-right">Precio Unit. (USD)</span>
               <span className="col-span-2 text-right">Subtotal</span>
             </div>
 
@@ -223,19 +236,42 @@ export default function NuevaCotizacionClient({
               return (
                 <div key={field.id} className="grid grid-cols-12 gap-2 items-start">
                   <div className="col-span-5">
-                    <Input placeholder="Descripción" {...register(`lineas.${idx}.descripcion`)} />
+                    <Input
+                      placeholder="Descripción"
+                      list="srv-list-nueva"
+                      {...register(`lineas.${idx}.descripcion`, {
+                        onChange: (e) => onDescripcionChange(idx, e.target.value),
+                      })}
+                    />
                     {errors.lineas?.[idx]?.descripcion && (
                       <p className="text-destructive text-xs">{errors.lineas[idx]?.descripcion?.message}</p>
                     )}
                   </div>
                   <div className="col-span-2">
-                    <Input type="number" min="1" className="text-center" {...register(`lineas.${idx}.cantidad`, { valueAsNumber: true })} />
+                    <Input
+                      type="number"
+                      min="1"
+                      className="text-center"
+                      {...register(`lineas.${idx}.cantidad`, { valueAsNumber: true })}
+                    />
+                    {errors.lineas?.[idx]?.cantidad && (
+                      <p className="text-destructive text-xs">{errors.lineas[idx]?.cantidad?.message}</p>
+                    )}
                   </div>
                   <div className="col-span-3">
-                    <Input type="number" min="0" step="0.01" className="text-right" {...register(`lineas.${idx}.precioUnitario`, { valueAsNumber: true })} />
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="text-right"
+                      {...register(`lineas.${idx}.precioUnitario`, { valueAsNumber: true })}
+                    />
+                    {errors.lineas?.[idx]?.precioUnitario && (
+                      <p className="text-destructive text-xs">{errors.lineas[idx]?.precioUnitario?.message}</p>
+                    )}
                   </div>
                   <div className="col-span-2 flex items-center justify-end gap-1 pt-1">
-                    <span className="text-sm font-mono flex-1 text-right">{formatLempiras(sub)}</span>
+                    <span className="text-sm font-mono flex-1 text-right">{formatDolares(sub)}</span>
                     <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => remove(idx)}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
@@ -258,16 +294,16 @@ export default function NuevaCotizacionClient({
             <div className="flex flex-col items-end gap-1 text-sm">
               <div className="flex gap-8">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-mono w-32 text-right">{formatLempiras(subtotal)}</span>
+                <span className="font-mono w-32 text-right">{formatDolares(subtotal)}</span>
               </div>
               <div className="flex gap-8">
                 <span className="text-muted-foreground">ISV (15%)</span>
-                <span className="font-mono w-32 text-right">{formatLempiras(isv)}</span>
+                <span className="font-mono w-32 text-right">{formatDolares(isv)}</span>
               </div>
               <Separator className="w-48 my-1" />
               <div className="flex gap-8 text-base font-bold">
                 <span>Total</span>
-                <span className="font-mono w-32 text-right">{formatLempiras(total)}</span>
+                <span className="font-mono w-32 text-right">{formatDolares(total)}</span>
               </div>
             </div>
           </CardContent>
