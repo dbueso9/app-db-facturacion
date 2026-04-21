@@ -12,6 +12,7 @@ import {
   LogOut,
   ShieldCheck,
   UserRound,
+  BarChart2,
 } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 
@@ -20,6 +21,7 @@ const links = [
   { href: "/facturas", label: "Facturas", icon: FileText },
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/servicios", label: "Servicios", icon: Briefcase },
+  { href: "/reportes", label: "Reportes", icon: BarChart2 },
 ];
 
 interface NavbarProps {

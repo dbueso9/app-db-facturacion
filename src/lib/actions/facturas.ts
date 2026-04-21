@@ -1,7 +1,7 @@
 "use server";
 
 import { createServerClient } from "@/lib/supabase";
-import { Factura, EstadoFactura } from "@/lib/types";
+import { Factura, EstadoFactura, MetodoPago } from "@/lib/types";
 import { EMPRESA, formatNumeroFactura } from "@/lib/empresa";
 
 export async function getFacturas(): Promise<Factura[]> {
@@ -52,6 +52,9 @@ function mapFacturaRow(row: Record<string, unknown>): Factura {
     isv: Number(row.isv),
     total: Number(row.total),
     estado: row.estado as EstadoFactura,
+    metodoPago: (row.metodo_pago as MetodoPago) || undefined,
+    tasaCambio: row.tasa_cambio ? Number(row.tasa_cambio) : undefined,
+    nombreProyecto: (row.nombre_proyecto as string) || undefined,
     notas: (row.notas as string) || "",
     creadaEn: row.creada_en as string,
   };
@@ -89,6 +92,9 @@ export async function saveFactura(factura: Factura): Promise<void> {
     isv: factura.isv,
     total: factura.total,
     estado: factura.estado,
+    metodo_pago: factura.metodoPago || null,
+    tasa_cambio: factura.tasaCambio || null,
+    nombre_proyecto: factura.nombreProyecto || null,
     notas: factura.notas,
     creada_en: factura.creadaEn,
   });

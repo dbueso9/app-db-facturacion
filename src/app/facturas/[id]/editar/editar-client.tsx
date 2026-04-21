@@ -218,16 +218,16 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
-              <span className="col-span-6">Descripción</span>
+              <span className="col-span-5">Descripción</span>
               <span className="col-span-2 text-center">Cantidad</span>
-              <span className="col-span-2 text-right">Precio Unit.</span>
+              <span className="col-span-3 text-right">Precio Unit.</span>
               <span className="col-span-2 text-right">Subtotal</span>
             </div>
             {fields.map((field, idx) => {
               const sub = (Number(lineas[idx]?.cantidad) || 0) * (Number(lineas[idx]?.precioUnitario) || 0);
               return (
                 <div key={field.id} className="grid grid-cols-12 gap-2 items-start">
-                  <div className="col-span-6">
+                  <div className="col-span-5">
                     <Input placeholder="Descripción del servicio" {...register(`lineas.${idx}.descripcion`)} />
                     {errors.lineas?.[idx]?.descripcion && (
                       <p className="text-destructive text-xs">{errors.lineas[idx]?.descripcion?.message}</p>
@@ -241,7 +241,7 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
                       {...register(`lineas.${idx}.cantidad`, { valueAsNumber: true })}
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <Input
                       type="number"
                       min="0"
@@ -250,12 +250,10 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
                       {...register(`lineas.${idx}.precioUnitario`, { valueAsNumber: true })}
                     />
                   </div>
-                  <div className="col-span-1 flex items-center justify-end pt-1.5">
-                    <span className="text-sm font-mono">{formatLempiras(sub)}</span>
-                  </div>
-                  <div className="col-span-1 flex items-center justify-end">
-                    <Button type="button" variant="ghost" size="icon" onClick={() => remove(idx)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                  <div className="col-span-2 flex items-center justify-end gap-1 pt-1">
+                    <span className="text-sm font-mono flex-1 text-right">{formatLempiras(sub)}</span>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => remove(idx)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
                   </div>
                 </div>

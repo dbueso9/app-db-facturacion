@@ -16,10 +16,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { updateEstadoFactura, deleteFactura } from "@/lib/actions/facturas";
+import { enviarFactura } from "@/lib/actions/email";
 import { Factura, EstadoFactura } from "@/lib/types";
 import { formatLempiras, formatFecha } from "@/lib/utils";
 import { EMPRESA } from "@/lib/empresa";
-import { ArrowLeft, Printer, Trash2, Download, Pencil } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ArrowLeft, Printer, Trash2, Download, Pencil, Send, CheckCircle, XCircle } from "lucide-react";
 import Link from "next/link";
 import jsPDF from "jspdf";
 
@@ -38,8 +42,29 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
   const [cambiando, setCambiando] = useState(false);
   const [eliminando, setEliminando] = useState(false);
   const [exportandoPdf, setExportandoPdf] = useState(false);
+  const [modalEmail, setModalEmail] = useState(false);
+  const [emailPara, setEmailPara] = useState(factura.cliente.correo || "");
+  const [emailAsunto, setEmailAsunto] = useState(
+    `Factura ${factura.numero}${factura.nombreProyecto ? ` — ${factura.nombreProyecto}` : ""}`
+  );
+  const [emailMensaje, setEmailMensaje] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [envioResultado, setEnvioResultado] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const estado = BADGE_ESTADO[estadoActual];
+
+  async function enviarCorreo() {
+    if (!emailPara.trim()) return;
+    setEnviando(true);
+    setEnvioResultado(null);
+    try {
+      const res = await enviarFactura(factura, emailPara.trim(), emailAsunto, emailMensaje);
+      setEnvioResultado({ ok: res.ok, msg: res.ok ? "Correo enviado correctamente" : res.error || "Error al enviar" });
+      if (res.ok) setTimeout(() => setModalEmail(false), 2000);
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   async function cambiarEstado(nuevoEstado: string | null) {
     if (!nuevoEstado || nuevoEstado === estadoActual) return;
@@ -92,7 +117,12 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = (canvas.height * pdfW) / canvas.width;
       pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-      pdf.save(`${factura.numero.replace(/\//g, "-")}.pdf`);
+      const partes = [
+        factura.nombreProyecto || "Factura",
+        factura.cliente.nombre,
+        factura.fecha,
+      ].map((s) => s.replace(/[/\\?%*:|"<>]/g, "-").trim());
+      pdf.save(`${partes.join(" - ")}.pdf`);
     } finally {
       setExportandoPdf(false);
     }
@@ -123,6 +153,10 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
               <SelectItem value="anulada">Anulada</SelectItem>
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={() => setModalEmail(true)}>
+            <Send className="h-4 w-4 mr-1" />
+            Enviar Correo
+          </Button>
           <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportandoPdf}>
             <Download className="h-4 w-4 mr-1" />
             {exportandoPdf ? "Generando..." : "Descargar PDF"}
@@ -166,6 +200,9 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
           <div className="text-right">
             <h2 className="text-2xl font-bold text-gray-900">FACTURA</h2>
             <p className="text-sm font-mono text-gray-600 mt-1">{factura.numero}</p>
+            {factura.nombreProyecto && (
+              <p className="text-sm font-semibold text-gray-700 mt-1">{factura.nombreProyecto}</p>
+            )}
             <div className="print:hidden mt-2">
               <Badge variant={estado.variant}>{estado.label}</Badge>
             </div>
@@ -174,47 +211,89 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
 
         <Separator className="my-6 bg-gray-200" />
 
-        {/* Datos fiscales empresa */}
-        <div className="grid grid-cols-2 gap-6 mb-6 text-sm">
-          <div>
-            <p className="font-semibold text-gray-700 mb-1">Emisor</p>
-            <p className="font-medium">{EMPRESA.nombre}</p>
-            <p className="text-gray-600">RTN: <span className="font-mono">{EMPRESA.rtn}</span></p>
+        {/* Datos fiscales — emisor y fechas */}
+        <div className="grid grid-cols-2 gap-6 mb-4 text-sm border border-gray-200 rounded-lg p-4">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Emisor</p>
+            <p className="font-bold text-gray-900">{EMPRESA.nombre}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">RTN</p>
+            <p className="font-mono font-semibold text-gray-800">{EMPRESA.rtn}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">Dirección</p>
+            <p className="text-gray-700">{EMPRESA.direccion}</p>
           </div>
-          <div>
-            <p className="font-semibold text-gray-700 mb-1">Fechas</p>
-            <p className="text-gray-600">Emisión: <span className="font-medium">{formatFecha(factura.fecha)}</span></p>
-            <p className="text-gray-600">Vencimiento: <span className="font-medium">{formatFecha(factura.fechaVencimiento)}</span></p>
+          <div className="space-y-1 text-right">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Fecha de Emisión</p>
+            <p className="font-semibold text-gray-900">{formatFecha(factura.fecha)}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mt-2">Fecha de Vencimiento</p>
+            <p className="font-semibold text-gray-900">{formatFecha(factura.fechaVencimiento)}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide mt-2">No. de Factura</p>
+            <p className="font-mono font-bold text-gray-900">{factura.numero}</p>
           </div>
         </div>
 
-        {/* Datos del cliente */}
-        <div className="bg-gray-50 rounded-lg p-4 mb-6 text-sm">
-          <p className="font-semibold text-gray-700 mb-2">Facturar a:</p>
-          <p className="font-medium text-gray-900">{factura.cliente.nombre}</p>
-          {factura.cliente.rtn && <p className="text-gray-600">RTN: <span className="font-mono">{factura.cliente.rtn}</span></p>}
-          {factura.cliente.direccion && <p className="text-gray-600">{factura.cliente.direccion}</p>}
-          {factura.cliente.correo && <p className="text-gray-600">{factura.cliente.correo}</p>}
-          {factura.cliente.telefono && <p className="text-gray-600">Tel: {factura.cliente.telefono}</p>}
+        {/* Datos del cliente — parados (label arriba, valor abajo) */}
+        <div className="border border-gray-200 rounded-lg p-4 mb-6 text-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Facturar a</p>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Nombre / Razón Social</p>
+              <p className="font-bold text-gray-900 mt-0.5">{factura.cliente.nombre}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">RTN</p>
+              <p className="font-mono font-semibold text-gray-900 mt-0.5">
+                {factura.cliente.rtn || <span className="text-gray-400 italic text-xs">Sin RTN</span>}
+              </p>
+            </div>
+            {factura.cliente.direccion && (
+              <div className="col-span-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Dirección</p>
+                <p className="text-gray-800 mt-0.5">{factura.cliente.direccion}</p>
+              </div>
+            )}
+            {factura.cliente.correo && (
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Correo</p>
+                <p className="text-gray-800 mt-0.5">{factura.cliente.correo}</p>
+              </div>
+            )}
+            {factura.cliente.telefono && (
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Teléfono</p>
+                <p className="text-gray-800 mt-0.5">{factura.cliente.telefono}</p>
+              </div>
+            )}
+          </div>
+          {!factura.cliente.rtn && (
+            <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+              ⚠ La factura sin RTN del adquiriente no genera crédito fiscal
+            </p>
+          )}
         </div>
 
         {/* Tabla de servicios */}
-        <table className="w-full text-sm mb-6">
+        <table className="w-full text-sm mb-6 table-fixed">
+          <colgroup>
+            <col className="w-[48%]" />
+            <col className="w-[10%]" />
+            <col className="w-[21%]" />
+            <col className="w-[21%]" />
+          </colgroup>
           <thead>
-            <tr className="border-b-2 border-gray-900">
-              <th className="text-left py-2 font-semibold text-gray-700">Descripción</th>
-              <th className="text-center py-2 font-semibold text-gray-700 w-16">Cant.</th>
-              <th className="text-right py-2 font-semibold text-gray-700 w-28">Precio Unit.</th>
-              <th className="text-right py-2 font-semibold text-gray-700 w-28">Subtotal</th>
+            <tr className="bg-gray-100 border-b-2 border-gray-800">
+              <th className="text-left py-2 px-2 font-semibold text-gray-700">Descripción del Servicio</th>
+              <th className="text-center py-2 px-2 font-semibold text-gray-700">Cant.</th>
+              <th className="text-right py-2 px-2 font-semibold text-gray-700">Precio Unit. (L.)</th>
+              <th className="text-right py-2 px-2 font-semibold text-gray-700">Subtotal (L.)</th>
             </tr>
           </thead>
           <tbody>
             {factura.lineas.map((l) => (
               <tr key={l.id} className="border-b border-gray-100">
-                <td className="py-2 text-gray-800">{l.descripcion}</td>
-                <td className="py-2 text-center text-gray-600">{l.cantidad}</td>
-                <td className="py-2 text-right font-mono text-gray-700">{formatLempiras(l.precioUnitario)}</td>
-                <td className="py-2 text-right font-mono font-medium">{formatLempiras(l.subtotal)}</td>
+                <td className="py-2 px-2 text-gray-800">{l.descripcion}</td>
+                <td className="py-2 px-2 text-center text-gray-600">{l.cantidad}</td>
+                <td className="py-2 px-2 text-right font-mono text-gray-700">{formatLempiras(l.precioUnitario)}</td>
+                <td className="py-2 px-2 text-right font-mono font-medium">{formatLempiras(l.subtotal)}</td>
               </tr>
             ))}
           </tbody>
@@ -222,50 +301,131 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
 
         {/* Totales */}
         <div className="flex justify-end mb-6">
-          <div className="w-64 space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Subtotal</span>
+          <div className="w-72 text-sm border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex justify-between px-4 py-2 bg-gray-50">
+              <span className="text-gray-600">Subtotal sin ISV</span>
               <span className="font-mono">{formatLempiras(factura.subtotal)}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between px-4 py-2">
               <span className="text-gray-600">ISV (15%)</span>
               <span className="font-mono">{formatLempiras(factura.isv)}</span>
             </div>
-            <Separator className="my-2 bg-gray-300" />
-            <div className="flex justify-between font-bold text-base">
+            <div className="flex justify-between px-4 py-3 bg-gray-900 text-white font-bold text-base">
               <span>Total a Pagar</span>
               <span className="font-mono">{formatLempiras(factura.total)}</span>
             </div>
           </div>
         </div>
 
-        {factura.notas && (
-          <div className="mb-6 text-sm">
-            <p className="font-semibold text-gray-700 mb-1">Notas:</p>
-            <p className="text-gray-600">{factura.notas}</p>
+        {/* Método de pago y notas */}
+        {(factura.metodoPago || factura.notas) && (
+          <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+            {factura.metodoPago && (
+              <div className="border border-gray-200 rounded-lg px-4 py-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Método de Pago</p>
+                <p className="font-semibold capitalize text-gray-900 mt-0.5">{factura.metodoPago}</p>
+              </div>
+            )}
+            {factura.notas && (
+              <div className="border border-gray-200 rounded-lg px-4 py-2 col-span-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Notas</p>
+                <p className="text-gray-700 mt-0.5">{factura.notas}</p>
+              </div>
+            )}
           </div>
         )}
 
-        <Separator className="my-6 bg-gray-200" />
+        {/* Tasa de cambio al momento de la emisión */}
+        {factura.tasaCambio && (
+          <div className="flex items-center justify-between text-xs border border-gray-200 rounded px-3 py-2 mb-4 bg-gray-50">
+            <span className="text-gray-500">Tasa de cambio BCH (USD/HNL) a la fecha de emisión</span>
+            <span className="font-mono font-semibold text-gray-800">L. {factura.tasaCambio.toFixed(4)}</span>
+          </div>
+        )}
 
-        {/* Footer CAI */}
-        <div className="text-xs text-gray-500 space-y-1">
-          <div className="grid grid-cols-2 gap-4">
+        {/* Aviso fiscal SAR */}
+        <div className="text-xs text-center text-gray-500 italic border border-gray-200 rounded px-3 py-2 mb-4">
+          La factura sin RTN del adquiriente no genera crédito fiscal
+        </div>
+
+        {/* Footer CAI / datos fiscales SAR */}
+        <div className="text-xs text-gray-600 border-t border-gray-300 pt-4 space-y-2">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1">
             <div>
-              <p><span className="font-medium">CAI:</span> <span className="font-mono">{EMPRESA.cai}</span></p>
-              <p><span className="font-medium">Fecha Límite Emisión:</span> {EMPRESA.fechaLimiteEmision}</p>
+              <span className="font-semibold text-gray-700">CAI: </span>
+              <span className="font-mono">{EMPRESA.cai}</span>
             </div>
             <div>
-              <p><span className="font-medium">Rango Autorizado:</span></p>
-              <p className="font-mono">Del N.{EMPRESA.rangoDesde}</p>
-              <p className="font-mono">Al  N.{EMPRESA.rangoHasta}</p>
+              <span className="font-semibold text-gray-700">Fecha Límite de Emisión: </span>
+              <span>{EMPRESA.fechaLimiteEmision}</span>
+            </div>
+            <div>
+              <span className="font-semibold text-gray-700">Rango Autorizado Desde: </span>
+              <span className="font-mono">N.{EMPRESA.rangoDesde}</span>
+            </div>
+            <div>
+              <span className="font-semibold text-gray-700">Rango Autorizado Hasta: </span>
+              <span className="font-mono">N.{EMPRESA.rangoHasta}</span>
             </div>
           </div>
-          <p className="text-center mt-3 text-gray-400">
-            {EMPRESA.nombre} · {EMPRESA.correo} · Tel: {EMPRESA.telefono}
+          <p className="text-center text-gray-400 pt-2">
+            {EMPRESA.nombre} · RTN {EMPRESA.rtn} · {EMPRESA.correo} · Tel: {EMPRESA.telefono}
+          </p>
+          <p className="text-center text-gray-300 text-[10px]">
+            Sistema de Facturación desarrollado por DB Consulting © {new Date().getFullYear()}
           </p>
         </div>
       </div>
+
+      {/* Dialog enviar por correo */}
+      <Dialog open={modalEmail} onOpenChange={(o) => { setModalEmail(o); setEnvioResultado(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar Factura por Correo</DialogTitle>
+            <DialogDescription>
+              {factura.numero}{factura.nombreProyecto ? ` · ${factura.nombreProyecto}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Para *</Label>
+              <Input
+                type="email"
+                value={emailPara}
+                onChange={(e) => setEmailPara(e.target.value)}
+                placeholder="correo@cliente.com"
+              />
+              <p className="text-xs text-muted-foreground">Puede separar varios correos con coma</p>
+            </div>
+            <div className="space-y-1">
+              <Label>Asunto</Label>
+              <Input value={emailAsunto} onChange={(e) => setEmailAsunto(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Mensaje (opcional)</Label>
+              <Textarea
+                value={emailMensaje}
+                onChange={(e) => setEmailMensaje(e.target.value)}
+                placeholder="Estimado cliente, adjunto encontrará su factura..."
+                rows={3}
+              />
+            </div>
+            {envioResultado && (
+              <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${envioResultado.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
+                {envioResultado.ok ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                {envioResultado.msg}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalEmail(false)}>Cancelar</Button>
+            <Button onClick={enviarCorreo} disabled={!emailPara.trim() || enviando}>
+              <Send className="h-4 w-4 mr-1" />
+              {enviando ? "Enviando..." : "Enviar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog confirmación anular */}
       <Dialog open={confirmandoAnular} onOpenChange={setConfirmandoAnular}>

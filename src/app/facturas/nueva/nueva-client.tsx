@@ -14,7 +14,8 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { crearNumeroFactura, saveFactura } from "@/lib/actions/facturas";
-import { Cliente, Servicio, Factura } from "@/lib/types";
+import { Cliente, Servicio, Factura, MetodoPago } from "@/lib/types";
+import { TasaCambio } from "@/lib/actions/tasa-cambio";
 import { formatLempiras, generarId } from "@/lib/utils";
 import { EMPRESA } from "@/lib/empresa";
 import { Plus, Trash2, ArrowLeft, AlertTriangle } from "lucide-react";
@@ -29,6 +30,8 @@ const facturaSchema = z.object({
   clienteId: z.string().min(1, "Seleccione un cliente"),
   fecha: z.string().min(1, "Fecha requerida"),
   fechaVencimiento: z.string().min(1, "Fecha de vencimiento requerida"),
+  metodoPago: z.enum(["transferencia", "cheque", "efectivo"]).optional(),
+  nombreProyecto: z.string().optional(),
   notas: z.string().optional(),
   lineas: z.array(lineaSchema).min(1, "Agregue al menos un servicio"),
 });
@@ -37,6 +40,8 @@ type FormValues = {
   clienteId: string;
   fecha: string;
   fechaVencimiento: string;
+  metodoPago?: MetodoPago;
+  nombreProyecto?: string;
   notas?: string;
   lineas: { descripcion: string; cantidad: number; precioUnitario: number }[];
 };
@@ -45,22 +50,26 @@ interface NuevaFacturaClientProps {
   clientes: Cliente[];
   servicios: Servicio[];
   limiteAlcanzado: boolean;
+  tasaCambio: TasaCambio | null;
 }
 
-export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzado }: NuevaFacturaClientProps) {
+export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzado, tasaCambio }: NuevaFacturaClientProps) {
   const router = useRouter();
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [catalogoKey, setCatalogoKey] = useState(0);
   const [guardando, setGuardando] = useState(false);
 
   const hoy = new Date().toISOString().split("T")[0];
-  const vencimiento = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const vencimiento = new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(facturaSchema) as Resolver<FormValues>,
     defaultValues: {
+      clienteId: "",
       fecha: hoy,
       fechaVencimiento: vencimiento,
+      metodoPago: undefined,
+      nombreProyecto: "",
       notas: "",
       lineas: [{ descripcion: "", cantidad: 1, precioUnitario: 0 }],
     },
@@ -118,6 +127,9 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
         isv: isvCalc,
         total: sub + isvCalc,
         estado: "emitida",
+        metodoPago: data.metodoPago,
+        tasaCambio: tasaCambio?.venta,
+        nombreProyecto: data.nombreProyecto || undefined,
         notas: data.notas || "",
         creadaEn: new Date().toISOString(),
       };
@@ -152,6 +164,14 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
           <h1 className="text-2xl font-bold">Nueva Factura</h1>
           <p className="text-muted-foreground text-sm">Complete los datos para emitir la factura</p>
         </div>
+        {tasaCambio && (
+          <div className="ml-auto text-right text-sm bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+            <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">Tasa BCH · {tasaCambio.fecha}</p>
+            <p className="font-mono font-bold text-blue-900">
+              Compra: L.{tasaCambio.compra.toFixed(4)} · Venta: L.{tasaCambio.venta.toFixed(4)}
+            </p>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -200,7 +220,15 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Nombre del Proyecto / Servicio</Label>
+              <Input
+                placeholder="Ej: App Inventario, Portal Web, Hosting..."
+                {...register("nombreProyecto")}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1">
                 <Label>Fecha de Emisión *</Label>
                 <Input type="date" {...register("fecha")} />
@@ -210,6 +238,19 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
                 <Label>Fecha de Vencimiento *</Label>
                 <Input type="date" {...register("fechaVencimiento")} />
                 {errors.fechaVencimiento && <p className="text-destructive text-xs">{errors.fechaVencimiento.message}</p>}
+              </div>
+              <div className="space-y-1">
+                <Label>Método de Pago</Label>
+                <Select onValueChange={(v) => setValue("metodoPago", v as MetodoPago)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>
@@ -235,16 +276,16 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
-              <span className="col-span-6">Descripción</span>
+              <span className="col-span-5">Descripción</span>
               <span className="col-span-2 text-center">Cantidad</span>
-              <span className="col-span-2 text-right">Precio Unit.</span>
+              <span className="col-span-3 text-right">Precio Unit.</span>
               <span className="col-span-2 text-right">Subtotal</span>
             </div>
             {fields.map((field, idx) => {
               const sub = (Number(lineas[idx]?.cantidad) || 0) * (Number(lineas[idx]?.precioUnitario) || 0);
               return (
                 <div key={field.id} className="grid grid-cols-12 gap-2 items-start">
-                  <div className="col-span-6">
+                  <div className="col-span-5">
                     <Input placeholder="Descripción del servicio" {...register(`lineas.${idx}.descripcion`)} />
                     {errors.lineas?.[idx]?.descripcion && (
                       <p className="text-destructive text-xs">{errors.lineas[idx]?.descripcion?.message}</p>
@@ -258,7 +299,7 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
                       {...register(`lineas.${idx}.cantidad`, { valueAsNumber: true })}
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <Input
                       type="number"
                       min="0"
@@ -267,12 +308,10 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
                       {...register(`lineas.${idx}.precioUnitario`, { valueAsNumber: true })}
                     />
                   </div>
-                  <div className="col-span-1 flex items-center justify-end pt-1.5">
-                    <span className="text-sm font-mono">{formatLempiras(sub)}</span>
-                  </div>
-                  <div className="col-span-1 flex items-center justify-end">
-                    <Button type="button" variant="ghost" size="icon" onClick={() => remove(idx)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                  <div className="col-span-2 flex items-center justify-end gap-1 pt-1">
+                    <span className="text-sm font-mono flex-1 text-right">{formatLempiras(sub)}</span>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => remove(idx)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
                   </div>
                 </div>

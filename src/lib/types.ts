@@ -1,10 +1,26 @@
 export interface Cliente {
   id: string;
+  codigo: string;
   nombre: string;
   rtn: string;
   direccion: string;
   correo: string;
   telefono: string;
+  creadoEn: string;
+}
+
+export type TipoContrato = "mantenimiento" | "hosting" | "proyecto_app" | "otro";
+
+export interface Contrato {
+  id: string;
+  clienteId: string;
+  nombreProyecto: string;
+  tipo: TipoContrato;
+  valorBase: number;
+  fechaInicio: string;
+  diaFacturacion: 1 | 2;
+  activo: boolean;
+  notas: string;
   creadoEn: string;
 }
 
@@ -17,6 +33,7 @@ export interface LineaFactura {
 }
 
 export type EstadoFactura = "borrador" | "emitida" | "pagada" | "anulada";
+export type MetodoPago = "transferencia" | "cheque" | "efectivo";
 
 export interface Factura {
   id: string;
@@ -31,6 +48,9 @@ export interface Factura {
   isv: number;
   total: number;
   estado: EstadoFactura;
+  metodoPago?: MetodoPago;
+  tasaCambio?: number;
+  nombreProyecto?: string;
   notas: string;
   creadaEn: string;
 }

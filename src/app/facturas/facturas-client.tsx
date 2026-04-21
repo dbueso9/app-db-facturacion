@@ -132,7 +132,7 @@ export default function FacturasClient({ initialFacturas }: { initialFacturas: F
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número</TableHead>
-                    <TableHead>Cliente</TableHead>
+                    <TableHead>Cliente / Proyecto</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Total</TableHead>
@@ -145,7 +145,12 @@ export default function FacturasClient({ initialFacturas }: { initialFacturas: F
                     return (
                       <TableRow key={f.id}>
                         <TableCell className="font-mono text-sm">{f.numero}</TableCell>
-                        <TableCell>{f.cliente.nombre}</TableCell>
+                        <TableCell>
+                          <p className="font-medium">{f.cliente.nombre}</p>
+                          {f.nombreProyecto && (
+                            <p className="text-xs text-muted-foreground">{f.nombreProyecto}</p>
+                          )}
+                        </TableCell>
                         <TableCell className="text-muted-foreground text-sm">{formatFecha(f.fecha)}</TableCell>
                         <TableCell>
                           <Badge variant={estado.variant}>{estado.label}</Badge>

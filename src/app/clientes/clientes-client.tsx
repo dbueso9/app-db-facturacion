@@ -2,26 +2,28 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { saveCliente, deleteCliente } from "@/lib/actions/clientes";
 import { Cliente } from "@/lib/types";
 import { generarId } from "@/lib/utils";
-import { Plus, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, ChevronRight } from "lucide-react";
 
-const EMPTY: Omit<Cliente, "id" | "creadoEn"> = {
-  nombre: "", rtn: "", direccion: "", correo: "", telefono: "",
-};
+type FormData = Omit<Cliente, "id" | "creadoEn">;
+
+const EMPTY: FormData = { codigo: "", nombre: "", rtn: "", direccion: "", correo: "", telefono: "" };
 
 export default function ClientesClient({ initialClientes }: { initialClientes: Cliente[] }) {
   const router = useRouter();
   const [clientes] = useState<Cliente[]>(initialClientes);
   const [abierto, setAbierto] = useState(false);
-  const [form, setForm] = useState<Omit<Cliente, "id" | "creadoEn">>(EMPTY);
+  const [form, setForm] = useState<FormData>(EMPTY);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
@@ -29,7 +31,14 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
   function abrir(cliente?: Cliente) {
     if (cliente) {
       setEditandoId(cliente.id);
-      setForm({ nombre: cliente.nombre, rtn: cliente.rtn, direccion: cliente.direccion, correo: cliente.correo, telefono: cliente.telefono });
+      setForm({
+        codigo: cliente.codigo,
+        nombre: cliente.nombre,
+        rtn: cliente.rtn,
+        direccion: cliente.direccion,
+        correo: cliente.correo,
+        telefono: cliente.telefono,
+      });
     } else {
       setEditandoId(null);
       setForm(EMPTY);
@@ -89,17 +98,26 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-28">Código</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>RTN</TableHead>
                   <TableHead>Correo</TableHead>
                   <TableHead>Teléfono</TableHead>
-                  <TableHead className="w-20"></TableHead>
+                  <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {clientes.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.nombre}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono text-xs">{c.codigo || "—"}</Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/clientes/${c.id}`} className="hover:underline flex items-center gap-1">
+                        {c.nombre}
+                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                      </Link>
+                    </TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">{c.rtn || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{c.correo || "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{c.telefono || "—"}</TableCell>
@@ -132,26 +150,59 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
             <DialogTitle>{editandoId ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label>Nombre *</Label>
-              <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} placeholder="Nombre del cliente o empresa" />
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label>Código</Label>
+                <Input
+                  value={form.codigo}
+                  onChange={(e) => setForm({ ...form, codigo: e.target.value })}
+                  placeholder="DBC-001 (auto)"
+                  className="font-mono"
+                />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label>Nombre *</Label>
+                <Input
+                  value={form.nombre}
+                  onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                  placeholder="Nombre del cliente o empresa"
+                />
+              </div>
             </div>
             <div className="space-y-1">
               <Label>RTN</Label>
-              <Input value={form.rtn} onChange={(e) => setForm({ ...form, rtn: e.target.value })} placeholder="Registro Tributario Nacional" />
+              <Input
+                value={form.rtn}
+                onChange={(e) => setForm({ ...form, rtn: e.target.value })}
+                placeholder="Registro Tributario Nacional"
+                className="font-mono"
+              />
             </div>
             <div className="space-y-1">
               <Label>Dirección</Label>
-              <Input value={form.direccion} onChange={(e) => setForm({ ...form, direccion: e.target.value })} placeholder="Dirección" />
+              <Input
+                value={form.direccion}
+                onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+                placeholder="Dirección"
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>Correo</Label>
-                <Input type="email" value={form.correo} onChange={(e) => setForm({ ...form, correo: e.target.value })} placeholder="correo@ejemplo.com" />
+                <Input
+                  type="email"
+                  value={form.correo}
+                  onChange={(e) => setForm({ ...form, correo: e.target.value })}
+                  placeholder="correo@ejemplo.com"
+                />
               </div>
               <div className="space-y-1">
                 <Label>Teléfono</Label>
-                <Input value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} placeholder="504 XXXXXXXX" />
+                <Input
+                  value={form.telefono}
+                  onChange={(e) => setForm({ ...form, telefono: e.target.value })}
+                  placeholder="504 XXXXXXXX"
+                />
               </div>
             </div>
           </div>

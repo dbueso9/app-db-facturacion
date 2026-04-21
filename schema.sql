@@ -3,6 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS dbc_clientes (
   id TEXT PRIMARY KEY,
+  codigo TEXT UNIQUE,
   nombre TEXT NOT NULL,
   rtn TEXT DEFAULT '',
   direccion TEXT DEFAULT '',
@@ -31,8 +32,24 @@ CREATE TABLE IF NOT EXISTS dbc_facturas (
   isv DECIMAL(12,2) NOT NULL,
   total DECIMAL(12,2) NOT NULL,
   estado TEXT NOT NULL DEFAULT 'borrador',
+  metodo_pago TEXT DEFAULT NULL,
+  tasa_cambio DECIMAL(8,4) DEFAULT NULL,
+  nombre_proyecto TEXT DEFAULT NULL,
   notas TEXT DEFAULT '',
   creada_en TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS dbc_contratos (
+  id TEXT PRIMARY KEY,
+  cliente_id TEXT NOT NULL REFERENCES dbc_clientes(id) ON DELETE CASCADE,
+  nombre_proyecto TEXT NOT NULL,
+  tipo TEXT NOT NULL DEFAULT 'otro',
+  valor_base DECIMAL(12,2) NOT NULL DEFAULT 0,
+  fecha_inicio DATE NOT NULL,
+  dia_facturacion INTEGER NOT NULL DEFAULT 1,
+  activo BOOLEAN NOT NULL DEFAULT true,
+  notas TEXT DEFAULT '',
+  creado_en TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS dbc_lineas_factura (
