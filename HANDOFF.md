@@ -247,9 +247,15 @@ SUPABASE_SERVICE_ROLE_KEY=...
   - Tabla de detalle mensual — clic en fila filtra facturas
 - **Navbar:** link "Reportes" agregado
 
-### Fase 6 — Cotizaciones
-- [ ] Crear cotización desde el mismo sistema (descuentos, fases, proyectos cerrados)
-- [ ] Convertir cotización en factura con un clic
+### ✅ Fase 6 — Cotizaciones (2026-04-21)
+- Nueva tabla `dbc_cotizaciones` + `dbc_lineas_cotizacion` (`migration_fase6.sql`)
+- CRUD completo: lista, crear, ver detalle, editar (solo borrador), eliminar
+- Numeración automática `COT-001`, `COT-002`...
+- Estados: borrador → enviada → aceptada / rechazada
+- **Convertir en Factura** — un clic genera factura emitida con todos los datos; cotización queda marcada como aceptada con link a la factura
+- Edición bloqueada si la cotización ya fue convertida
+- Métrica de monto aceptado en la lista
+- Link "Cotizaciones" agregado al navbar
 
 ### Fase 7 — Funcionalidades avanzadas
 - [ ] Sincronización offline/online (Service Workers + IndexedDB)

@@ -55,6 +55,35 @@ export interface Factura {
   creadaEn: string;
 }
 
+export type EstadoCotizacion = "borrador" | "enviada" | "aceptada" | "rechazada";
+
+export interface LineaCotizacion {
+  id: string;
+  descripcion: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+
+export interface Cotizacion {
+  id: string;
+  numero: string;
+  secuencia: number;
+  fecha: string;
+  fechaValidez: string;
+  clienteId: string;
+  cliente: Cliente;
+  lineas: LineaCotizacion[];
+  subtotal: number;
+  isv: number;
+  total: number;
+  estado: EstadoCotizacion;
+  nombreProyecto?: string;
+  notas: string;
+  convertidaAFacturaId?: string;
+  creadaEn: string;
+}
+
 export interface Servicio {
   id: string;
   nombre: string;

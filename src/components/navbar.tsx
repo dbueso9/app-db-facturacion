@@ -13,12 +13,14 @@ import {
   ShieldCheck,
   UserRound,
   BarChart2,
+  ClipboardList,
 } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/facturas", label: "Facturas", icon: FileText },
+  { href: "/cotizaciones", label: "Cotizaciones", icon: ClipboardList },
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/servicios", label: "Servicios", icon: Briefcase },
   { href: "/reportes", label: "Reportes", icon: BarChart2 },
