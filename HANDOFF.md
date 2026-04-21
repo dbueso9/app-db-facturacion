@@ -261,10 +261,23 @@ SUPABASE_SERVICE_ROLE_KEY=...
 - CRUD completo: lista, crear, ver detalle, editar (solo borrador), eliminar
 - Numeración automática `COT-001`, `COT-002`...
 - Estados: borrador → enviada → aceptada / rechazada
-- **Convertir en Factura** — un clic genera factura emitida con todos los datos; cotización queda marcada como aceptada con link a la factura
+- **Moneda:** Cotizaciones se manejan **100% en USD** (`formatDolares`)
+- **Convertir en Factura** — convierte precios USD → LPS usando tasa BCH venta; genera factura emitida con todos los datos; cotización queda marcada con link a la factura
 - Edición bloqueada si la cotización ya fue convertida
-- Métrica de monto aceptado en la lista
+- Métrica de monto aceptado en la lista (en USD)
 - Link "Cotizaciones" agregado al navbar
+
+### ✅ Fase 7 — Correcciones críticas de UX (2026-04-21)
+- **RTN:** validación 14 dígitos, sin duplicados; `checkRtnExiste` server action
+- **Auto-refresh de páginas** tras crear: `useEffect` + `router.refresh()` para sincronizar estado React con props de servidor
+- **Select de cliente en facturas/cotizaciones:** `Controller` (React Hook Form) + muestra solo `c.nombre` (sin "— RTN: xxx"); resuelve bug silencioso de submit que no funcionaba
+- **Autocomplete de servicios:** `<datalist>` nativo; al seleccionar un servicio auto-rellena el precio unitario desde el catálogo
+- **Precios del catálogo en USD;** en facturas se convierten a LPS via `tasaCambio.venta`
+- **Condiciones de pago:** 30/60/90 días; calcula `fechaVencimiento` automáticamente
+- **Todos los campos obligatorios:** validación Zod + errores en rojo con `FieldError`
+- **Fix "Emitir Factura" no hacía nada:** `clienteId` no estaba registrado en RHF; fix con `<input type="hidden" {...register("clienteId")} />`
+- **`condicion_pago` column:** backward-compat retry en `saveFactura`; migración `migration_condicion_pago.sql`
+- **`formatDolares` helper** agregado a `src/lib/utils.ts` para montos en USD
 
 ### Fase 7 — Funcionalidades avanzadas
 - [ ] Sincronización offline/online (Service Workers + IndexedDB)
@@ -273,6 +286,8 @@ SUPABASE_SERVICE_ROLE_KEY=...
 - [ ] Sistemas adicionales (agenda, CRM, contable) — proyectos separados
 
 ### Configuraciones pendientes (manuales)
+- [ ] Ejecutar `migration_condicion_pago.sql` en Supabase SQL Editor: `ALTER TABLE dbc_facturas ADD COLUMN IF NOT EXISTS condicion_pago INTEGER;`
+- [ ] Ejecutar `migration_fase6.sql` en Supabase SQL Editor (tablas cotizaciones)
 - [ ] Ejecutar `migration_fase3.sql` en Supabase SQL Editor (si no se ha hecho)
 - [ ] Configurar `RESEND_API_KEY` en `.env.local` y en Vercel env vars
 - [ ] Agregar dominio `dbconsulting.hn` en Resend y actualizar DNS
@@ -335,3 +350,10 @@ git push  # Vercel despliega automáticamente a producción desde main
 | Reportería Fase 5 (dashboard + /reportes) | 2026-04-21 | ✅ |
 | Fix build Turbopack: calcularMontoContrato fuera de use server | 2026-04-21 | ✅ |
 | Cotizaciones Fase 6 (COT-XXX, convertir a factura) | 2026-04-21 | ✅ |
+| Cotizaciones en USD, conversión USD→LPS al facturar | 2026-04-21 | ✅ |
+| Fix Select cliente (Controller + solo nombre) | 2026-04-21 | ✅ |
+| Autocomplete servicios con datalist (cotizaciones) | 2026-04-21 | ✅ |
+| RTN 14 dígitos + sin duplicados | 2026-04-21 | ✅ |
+| Condición de pago 30/60/90 días | 2026-04-21 | ✅ |
+| Fix "Emitir Factura" no hacía nada | 2026-04-21 | ✅ |
+| migration_condicion_pago.sql (backward-compat retry) | 2026-04-21 | ✅ |
