@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray, Resolver } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { saveFactura } from "@/lib/actions/facturas";
-import { Cliente, Servicio, Factura } from "@/lib/types";
+import { Cliente, Servicio, Factura, MetodoPago } from "@/lib/types";
+import { TasaCambio } from "@/lib/actions/tasa-cambio";
 import { formatLempiras, generarId } from "@/lib/utils";
 import { EMPRESA } from "@/lib/empresa";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
@@ -21,13 +22,15 @@ import { Plus, Trash2, ArrowLeft } from "lucide-react";
 const lineaSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
   cantidad: z.number().min(1, "Mínimo 1"),
-  precioUnitario: z.number().min(0.01, "Precio requerido"),
+  precioUnitario: z.number().min(0.01, "Precio debe ser mayor a 0"),
 });
 
 const facturaSchema = z.object({
   clienteId: z.string().min(1, "Seleccione un cliente"),
   fecha: z.string().min(1, "Fecha requerida"),
-  fechaVencimiento: z.string().min(1, "Fecha de vencimiento requerida"),
+  metodoPago: z.string().min(1, "Seleccione método de pago"),
+  condicionPago: z.string().min(1, "Seleccione condición de pago"),
+  nombreProyecto: z.string().min(1, "El nombre del proyecto es requerido"),
   notas: z.string().optional(),
   lineas: z.array(lineaSchema).min(1, "Agregue al menos un servicio"),
 });
@@ -35,7 +38,9 @@ const facturaSchema = z.object({
 type FormValues = {
   clienteId: string;
   fecha: string;
-  fechaVencimiento: string;
+  metodoPago: string;
+  condicionPago: string;
+  nombreProyecto: string;
   notas?: string;
   lineas: { descripcion: string; cantidad: number; precioUnitario: number }[];
 };
@@ -44,20 +49,28 @@ interface EditarClientProps {
   factura: Factura;
   clientes: Cliente[];
   servicios: Servicio[];
+  tasaCambio: TasaCambio | null;
 }
 
-export default function EditarClient({ factura, clientes, servicios }: EditarClientProps) {
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="text-red-500 text-xs mt-0.5">{msg}</p>;
+}
+
+export default function EditarClient({ factura, clientes, servicios, tasaCambio }: EditarClientProps) {
   const router = useRouter();
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(factura.cliente);
   const [catalogoKey, setCatalogoKey] = useState(0);
   const [guardando, setGuardando] = useState(false);
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(facturaSchema) as Resolver<FormValues>,
+    resolver: zodResolver(facturaSchema),
     defaultValues: {
       clienteId: factura.clienteId,
       fecha: factura.fecha,
-      fechaVencimiento: factura.fechaVencimiento,
+      metodoPago: factura.metodoPago || "",
+      condicionPago: factura.condicionPago ? String(factura.condicionPago) : "30",
+      nombreProyecto: factura.nombreProyecto || "",
       notas: factura.notas || "",
       lineas: factura.lineas.map((l) => ({
         descripcion: l.descripcion,
@@ -69,30 +82,52 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
 
   const { fields, append, remove } = useFieldArray({ control, name: "lineas" });
   const lineas = watch("lineas");
+  const fechaValue = watch("fecha");
+  const condicionPagoValue = watch("condicionPago");
+
+  const fechaVencimientoCalc = (() => {
+    if (!fechaValue || !condicionPagoValue) return "";
+    const dias = parseInt(condicionPagoValue);
+    return new Date(new Date(fechaValue + "T00:00:00").getTime() + dias * 86400000)
+      .toISOString().split("T")[0];
+  })();
 
   const subtotal = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * (Number(l.precioUnitario) || 0), 0);
   const isv = subtotal * EMPRESA.isv;
   const total = subtotal + isv;
 
   function onClienteChange(id: string | null) {
-    if (!id) return;
     const c = clientes.find((c) => c.id === id);
     setClienteSeleccionado(c || null);
-    setValue("clienteId", id);
+    setValue("clienteId", id || "", { shouldValidate: true });
   }
 
   function agregarServicioCatalogo(servicioId: string | null) {
     if (!servicioId) return;
     const s = servicios.find((s) => s.id === servicioId);
     if (!s) return;
-    append({ descripcion: s.nombre, cantidad: 1, precioUnitario: s.precioBase });
+    const precio = tasaCambio ? Number((s.precioBase * tasaCambio.venta).toFixed(2)) : s.precioBase;
+    append({ descripcion: s.nombre, cantidad: 1, precioUnitario: precio });
     setCatalogoKey((k) => k + 1);
+  }
+
+  function handleDescripcionChange(idx: number, value: string, rhfOnChange: (e: React.ChangeEvent<HTMLInputElement>) => void, e: React.ChangeEvent<HTMLInputElement>) {
+    rhfOnChange(e);
+    const matched = servicios.find(s => s.nombre.toLowerCase() === value.toLowerCase());
+    if (matched) {
+      const precio = tasaCambio ? Number((matched.precioBase * tasaCambio.venta).toFixed(2)) : matched.precioBase;
+      setValue(`lineas.${idx}.precioUnitario`, precio, { shouldValidate: true });
+    }
   }
 
   async function onSubmit(data: FormValues) {
     if (!clienteSeleccionado) return;
     setGuardando(true);
     try {
+      const dias = parseInt(data.condicionPago);
+      const fechaVenc = new Date(new Date(data.fecha + "T00:00:00").getTime() + dias * 86400000)
+        .toISOString().split("T")[0];
+
       const lineasCalc = data.lineas.map((l, idx) => ({
         id: factura.lineas[idx]?.id || generarId(),
         descripcion: l.descripcion,
@@ -107,13 +142,16 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
       const facturaActualizada: Factura = {
         ...factura,
         fecha: data.fecha,
-        fechaVencimiento: data.fechaVencimiento,
+        fechaVencimiento: fechaVenc,
         clienteId: clienteSeleccionado.id,
         cliente: clienteSeleccionado,
         lineas: lineasCalc,
         subtotal: sub,
         isv: isvCalc,
         total: sub + isvCalc,
+        metodoPago: data.metodoPago as MetodoPago,
+        condicionPago: dias,
+        nombreProyecto: data.nombreProyecto || undefined,
         notas: data.notas || "",
       };
 
@@ -127,6 +165,10 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <datalist id="srv-list-editar">
+        {servicios.map((s) => <option key={s.id} value={s.nombre} />)}
+      </datalist>
+
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
@@ -138,6 +180,8 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <input type="hidden" {...register("clienteId")} />
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Datos del Cliente</CardTitle>
@@ -145,72 +189,127 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
           <CardContent className="space-y-4">
             <div className="space-y-1">
               <Label>Cliente *</Label>
-              <Select defaultValue={factura.clienteId} onValueChange={onClienteChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Seleccione un cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clientes.length === 0 ? (
-                    <SelectItem value="_none" disabled>
-                      No hay clientes — cree uno primero
-                    </SelectItem>
-                  ) : (
-                    clientes.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.nombre}{c.rtn ? ` — RTN: ${c.rtn}` : ""}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              {errors.clienteId && <p className="text-destructive text-xs">{errors.clienteId.message}</p>}
+              <Controller
+                name="clienteId"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value || ""}
+                    onValueChange={(v) => { field.onChange(v); onClienteChange(v); }}
+                  >
+                    <SelectTrigger className={`w-full ${errors.clienteId ? "border-red-500" : ""}`}>
+                      <SelectValue placeholder="Seleccione un cliente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clientes.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <FieldError msg={errors.clienteId?.message} />
             </div>
 
             {clienteSeleccionado && (
               <div className="bg-muted/50 rounded-lg p-3 text-sm grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-muted-foreground text-xs">RTN</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Cliente</p>
+                  <p className="font-semibold">{clienteSeleccionado.nombre}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">RTN</p>
                   <p className="font-mono">{clienteSeleccionado.rtn || "—"}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground text-xs">Teléfono</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Teléfono</p>
                   <p>{clienteSeleccionado.telefono || "—"}</p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-muted-foreground text-xs">Dirección</p>
+                  <p className="text-muted-foreground text-xs uppercase tracking-wide">Dirección</p>
                   <p>{clienteSeleccionado.direccion || "—"}</p>
                 </div>
               </div>
             )}
 
+            <div className="space-y-1">
+              <Label>Nombre del Proyecto / Servicio *</Label>
+              <Input
+                placeholder="Ej: App Inventario, Portal Web, Hosting..."
+                {...register("nombreProyecto")}
+                className={errors.nombreProyecto ? "border-red-500" : ""}
+              />
+              <FieldError msg={errors.nombreProyecto?.message} />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>Fecha de Emisión *</Label>
-                <Input type="date" {...register("fecha")} />
-                {errors.fecha && <p className="text-destructive text-xs">{errors.fecha.message}</p>}
+                <Input type="date" {...register("fecha")} className={errors.fecha ? "border-red-500" : ""} />
+                <FieldError msg={errors.fecha?.message} />
               </div>
               <div className="space-y-1">
-                <Label>Fecha de Vencimiento *</Label>
-                <Input type="date" {...register("fechaVencimiento")} />
-                {errors.fechaVencimiento && <p className="text-destructive text-xs">{errors.fechaVencimiento.message}</p>}
+                <Label>Condición de Pago *</Label>
+                <Controller
+                  name="condicionPago"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className={errors.condicionPago ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Seleccionar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 días</SelectItem>
+                        <SelectItem value="60">60 días</SelectItem>
+                        <SelectItem value="90">90 días</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <FieldError msg={errors.condicionPago?.message} />
+                {fechaVencimientoCalc && (
+                  <p className="text-xs text-muted-foreground">Vence: <span className="font-medium text-foreground">{fechaVencimientoCalc}</span></p>
+                )}
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Método de Pago *</Label>
+              <Controller
+                name="metodoPago"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className={errors.metodoPago ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="transferencia">Transferencia bancaria</SelectItem>
+                      <SelectItem value="cheque">Cheque</SelectItem>
+                      <SelectItem value="efectivo">Efectivo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <FieldError msg={errors.metodoPago?.message} />
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Servicios / Productos</CardTitle>
+            <div>
+              <CardTitle className="text-base">Servicios / Productos</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Escribe para autocompletar desde el catálogo</p>
+            </div>
             {servicios.length > 0 && (
               <Select key={catalogoKey} onValueChange={agregarServicioCatalogo}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-52">
                   <SelectValue placeholder="Agregar del catálogo" />
                 </SelectTrigger>
                 <SelectContent>
                   {servicios.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.nombre}
-                    </SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.nombre}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -220,57 +319,69 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
             <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
               <span className="col-span-5">Descripción</span>
               <span className="col-span-2 text-center">Cantidad</span>
-              <span className="col-span-3 text-right">Precio Unit.</span>
+              <span className="col-span-3 text-right">Precio Unit. (L.)</span>
               <span className="col-span-2 text-right">Subtotal</span>
             </div>
+
             {fields.map((field, idx) => {
               const sub = (Number(lineas[idx]?.cantidad) || 0) * (Number(lineas[idx]?.precioUnitario) || 0);
+              const { onChange: rhfOnChange, ...rhfRest } = register(`lineas.${idx}.descripcion`);
               return (
-                <div key={field.id} className="grid grid-cols-12 gap-2 items-start">
-                  <div className="col-span-5">
-                    <Input placeholder="Descripción del servicio" {...register(`lineas.${idx}.descripcion`)} />
-                    {errors.lineas?.[idx]?.descripcion && (
-                      <p className="text-destructive text-xs">{errors.lineas[idx]?.descripcion?.message}</p>
-                    )}
+                <div key={field.id} className="space-y-1">
+                  <div className="grid grid-cols-12 gap-2 items-start">
+                    <div className="col-span-5">
+                      <Input
+                        {...rhfRest}
+                        list="srv-list-editar"
+                        placeholder="Descripción del servicio"
+                        className={errors.lineas?.[idx]?.descripcion ? "border-red-500" : ""}
+                        onChange={(e) => handleDescripcionChange(idx, e.target.value, rhfOnChange, e)}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        className={`text-center ${errors.lineas?.[idx]?.cantidad ? "border-red-500" : ""}`}
+                        {...register(`lineas.${idx}.cantidad`, { valueAsNumber: true })}
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className={`text-right ${errors.lineas?.[idx]?.precioUnitario ? "border-red-500" : ""}`}
+                        {...register(`lineas.${idx}.precioUnitario`, { valueAsNumber: true })}
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-center justify-end gap-1 pt-1">
+                      <span className="text-sm font-mono flex-1 text-right">{formatLempiras(sub)}</span>
+                      {fields.length > 1 && (
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => remove(idx)}>
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="col-span-2">
-                    <Input
-                      type="number"
-                      min="1"
-                      className="text-center"
-                      {...register(`lineas.${idx}.cantidad`, { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="text-right"
-                      {...register(`lineas.${idx}.precioUnitario`, { valueAsNumber: true })}
-                    />
-                  </div>
-                  <div className="col-span-2 flex items-center justify-end gap-1 pt-1">
-                    <span className="text-sm font-mono flex-1 text-right">{formatLempiras(sub)}</span>
-                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => remove(idx)}>
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  </div>
+                  {(errors.lineas?.[idx]?.descripcion || errors.lineas?.[idx]?.cantidad || errors.lineas?.[idx]?.precioUnitario) && (
+                    <div className="grid grid-cols-12 gap-2">
+                      <div className="col-span-5"><FieldError msg={errors.lineas?.[idx]?.descripcion?.message} /></div>
+                      <div className="col-span-2 text-center"><FieldError msg={errors.lineas?.[idx]?.cantidad?.message} /></div>
+                      <div className="col-span-3 text-right"><FieldError msg={errors.lineas?.[idx]?.precioUnitario?.message} /></div>
+                    </div>
+                  )}
                 </div>
               );
             })}
 
             {errors.lineas && !Array.isArray(errors.lineas) && (
-              <p className="text-destructive text-xs">{(errors.lineas as { message?: string }).message}</p>
+              <FieldError msg={(errors.lineas as { message?: string }).message} />
             )}
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => append({ descripcion: "", cantidad: 1, precioUnitario: 0 })}
-            >
-              <Plus className="h-4 w-4" />
+            <Button type="button" variant="outline" size="sm" onClick={() => append({ descripcion: "", cantidad: 1, precioUnitario: 0 })}>
+              <Plus className="h-4 w-4 mr-1" />
               Agregar línea
             </Button>
 
@@ -296,21 +407,15 @@ export default function EditarClient({ factura, clientes, servicios }: EditarCli
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Notas</CardTitle>
+            <CardTitle className="text-base">Notas adicionales</CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              placeholder="Notas adicionales, condiciones de pago, etc."
-              rows={3}
-              {...register("notas")}
-            />
+            <Textarea placeholder="Observaciones, instrucciones de pago, etc." rows={3} {...register("notas")} />
           </CardContent>
         </Card>
 
         <div className="flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
-            Cancelar
-          </Button>
+          <Button type="button" variant="outline" onClick={() => router.back()}>Cancelar</Button>
           <Button type="submit" disabled={guardando}>
             {guardando ? "Guardando..." : "Guardar cambios"}
           </Button>

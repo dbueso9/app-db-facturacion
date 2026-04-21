@@ -21,6 +21,14 @@ export function formatFecha(fecha: string): string {
   });
 }
 
+export function formatDolares(valor: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(valor);
+}
+
 export function generarId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }

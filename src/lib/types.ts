@@ -49,6 +49,7 @@ export interface Factura {
   total: number;
   estado: EstadoFactura;
   metodoPago?: MetodoPago;
+  condicionPago?: number;
   tasaCambio?: number;
   nombreProyecto?: string;
   notas: string;

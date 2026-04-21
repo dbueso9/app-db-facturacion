@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { saveServicio, deleteServicio } from "@/lib/actions/servicios";
 import { Servicio, CategoriaServicio } from "@/lib/types";
-import { formatLempiras, generarId } from "@/lib/utils";
+import { formatDolares, generarId } from "@/lib/utils";
 import { Plus, Pencil, Trash2, Briefcase } from "lucide-react";
 
 const CATEGORIAS: Record<CategoriaServicio, string> = {
@@ -25,16 +25,27 @@ const CATEGORIAS: Record<CategoriaServicio, string> = {
   otro: "Otro",
 };
 
-const EMPTY = { nombre: "", descripcion: "", precioBase: 0, categoria: "consultoria" as CategoriaServicio };
+type FormData = { nombre: string; descripcion: string; precioBase: number; categoria: CategoriaServicio };
+type FormErrors = Partial<Record<keyof FormData, string>>;
+
+const EMPTY: FormData = { nombre: "", descripcion: "", precioBase: 0, categoria: "consultoria" };
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="text-red-500 text-xs mt-0.5">{msg}</p>;
+}
 
 export default function ServiciosClient({ initialServicios }: { initialServicios: Servicio[] }) {
   const router = useRouter();
-  const [servicios] = useState<Servicio[]>(initialServicios);
+  const [servicios, setServicios] = useState<Servicio[]>(initialServicios);
   const [abierto, setAbierto] = useState(false);
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState<FormData>(EMPTY);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
+
+  useEffect(() => { setServicios(initialServicios); }, [initialServicios]);
 
   function abrir(s?: Servicio) {
     if (s) {
@@ -44,15 +55,25 @@ export default function ServiciosClient({ initialServicios }: { initialServicios
       setEditandoId(null);
       setForm(EMPTY);
     }
+    setFormErrors({});
     setAbierto(true);
   }
 
   async function guardar() {
-    if (!form.nombre.trim()) return;
+    const errs: FormErrors = {};
+    if (!form.nombre.trim()) errs.nombre = "El nombre es requerido";
+    if (!form.precioBase || form.precioBase <= 0) errs.precioBase = "Ingrese un precio mayor a 0";
+
+    if (Object.keys(errs).length > 0) { setFormErrors(errs); return; }
+
     setGuardando(true);
     try {
       const servicio: Servicio = { id: editandoId || generarId(), ...form };
       await saveServicio(servicio);
+      setServicios(prev => {
+        const exists = prev.find(s => s.id === servicio.id);
+        return exists ? prev.map(s => s.id === servicio.id ? servicio : s) : [...prev, servicio];
+      });
       setAbierto(false);
       router.refresh();
     } finally {
@@ -64,6 +85,7 @@ export default function ServiciosClient({ initialServicios }: { initialServicios
     setEliminando(id);
     try {
       await deleteServicio(id);
+      setServicios(prev => prev.filter(s => s.id !== id));
       router.refresh();
     } finally {
       setEliminando(null);
@@ -75,7 +97,7 @@ export default function ServiciosClient({ initialServicios }: { initialServicios
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Catálogo de Servicios</h1>
-          <p className="text-muted-foreground text-sm">{servicios.length} servicios disponibles</p>
+          <p className="text-muted-foreground text-sm">{servicios.length} servicios disponibles · precios en USD</p>
         </div>
         <Button onClick={() => abrir()}>
           <Plus className="h-4 w-4 mr-2" />
@@ -97,7 +119,7 @@ export default function ServiciosClient({ initialServicios }: { initialServicios
                   <TableHead>Nombre</TableHead>
                   <TableHead>Categoría</TableHead>
                   <TableHead>Descripción</TableHead>
-                  <TableHead className="text-right">Precio Base</TableHead>
+                  <TableHead className="text-right">Precio Base (USD)</TableHead>
                   <TableHead className="w-20"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -109,18 +131,13 @@ export default function ServiciosClient({ initialServicios }: { initialServicios
                       <Badge variant="secondary">{CATEGORIAS[s.categoria]}</Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{s.descripcion || "—"}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold">{formatLempiras(s.precioBase)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-green-700">{formatDolares(s.precioBase)}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={() => abrir(s)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => eliminar(s.id)}
-                          disabled={eliminando === s.id}
-                        >
+                        <Button variant="ghost" size="icon" onClick={() => eliminar(s.id)} disabled={eliminando === s.id}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
@@ -141,7 +158,13 @@ export default function ServiciosClient({ initialServicios }: { initialServicios
           <div className="space-y-4 py-2">
             <div className="space-y-1">
               <Label>Nombre *</Label>
-              <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Consultoría IT" />
+              <Input
+                value={form.nombre}
+                onChange={(e) => { setForm({ ...form, nombre: e.target.value }); if (formErrors.nombre) setFormErrors({ ...formErrors, nombre: undefined }); }}
+                placeholder="Ej: Consultoría IT"
+                className={formErrors.nombre ? "border-red-500" : ""}
+              />
+              <FieldError msg={formErrors.nombre} />
             </div>
             <div className="space-y-1">
               <Label>Categoría</Label>
@@ -161,13 +184,25 @@ export default function ServiciosClient({ initialServicios }: { initialServicios
               <Textarea value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} rows={2} placeholder="Descripción del servicio" />
             </div>
             <div className="space-y-1">
-              <Label>Precio Base (L.)</Label>
-              <Input type="number" min="0" step="0.01" value={form.precioBase} onChange={(e) => setForm({ ...form, precioBase: Number(e.target.value) })} />
+              <Label>Precio Base (USD) *</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.precioBase || ""}
+                  onChange={(e) => { setForm({ ...form, precioBase: Number(e.target.value) }); if (formErrors.precioBase) setFormErrors({ ...formErrors, precioBase: undefined }); }}
+                  className={`pl-7 ${formErrors.precioBase ? "border-red-500" : ""}`}
+                  placeholder="0.00"
+                />
+              </div>
+              <FieldError msg={formErrors.precioBase} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAbierto(false)}>Cancelar</Button>
-            <Button onClick={guardar} disabled={!form.nombre.trim() || guardando}>
+            <Button onClick={guardar} disabled={guardando}>
               {guardando ? "Guardando..." : "Guardar"}
             </Button>
           </DialogFooter>

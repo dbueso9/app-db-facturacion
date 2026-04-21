@@ -2,6 +2,7 @@
 
 import { createServerClient } from "@/lib/supabase";
 import { Factura, EstadoFactura, MetodoPago } from "@/lib/types";
+
 import { EMPRESA, formatNumeroFactura } from "@/lib/empresa";
 
 export async function getFacturas(): Promise<Factura[]> {
@@ -53,6 +54,7 @@ function mapFacturaRow(row: Record<string, unknown>): Factura {
     total: Number(row.total),
     estado: row.estado as EstadoFactura,
     metodoPago: (row.metodo_pago as MetodoPago) || undefined,
+    condicionPago: row.condicion_pago ? Number(row.condicion_pago) : undefined,
     tasaCambio: row.tasa_cambio ? Number(row.tasa_cambio) : undefined,
     nombreProyecto: (row.nombre_proyecto as string) || undefined,
     notas: (row.notas as string) || "",
@@ -93,6 +95,7 @@ export async function saveFactura(factura: Factura): Promise<void> {
     total: factura.total,
     estado: factura.estado,
     metodo_pago: factura.metodoPago || null,
+    condicion_pago: factura.condicionPago || null,
     tasa_cambio: factura.tasaCambio || null,
     nombre_proyecto: factura.nombreProyecto || null,
     notas: factura.notas,

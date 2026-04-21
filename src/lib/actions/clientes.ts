@@ -66,3 +66,12 @@ export async function deleteCliente(id: string): Promise<void> {
   const { error } = await supabase.from("dbc_clientes").delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function checkRtnExiste(rtn: string, excludeId?: string): Promise<boolean> {
+  if (!rtn || rtn.length !== 14) return false;
+  const supabase = createServerClient();
+  const { data } = await supabase.from("dbc_clientes").select("id").eq("rtn", rtn);
+  if (!data || data.length === 0) return false;
+  if (excludeId) return data.some((r: { id: string }) => r.id !== excludeId);
+  return data.length > 0;
+}
