@@ -297,14 +297,23 @@ SUPABASE_SERVICE_ROLE_KEY=...
 ```bash
 cd "espacio-de-trabajo-claude - App Fact DB/db-consulting-facturas"
 npm run dev
-# → http://localhost:3000
-# Login: admin / admin123
 ```
+
+Cuando el terminal muestre `✓ Ready in ...ms`, abrir manualmente el navegador en:
+
+**http://localhost:3000** → redirige a `/login` automáticamente  
+Login: `admin` / `admin123`
+
+> ⚠️ El error _"Unsafe attempt to load URL http://localhost:3000"_ en Chrome significa que el
+> servidor **no está corriendo**. Verificar que `npm run dev` esté activo en la terminal antes
+> de abrir el navegador.
 
 ## Cómo hacer deploy
 
 ```bash
-git push  # Vercel despliega automáticamente desde main
+git add .
+git commit -m "descripción del cambio"
+git push  # Vercel despliega automáticamente a producción desde main
 ```
 
 ---
