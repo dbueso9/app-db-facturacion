@@ -279,11 +279,18 @@ SUPABASE_SERVICE_ROLE_KEY=...
 - **`condicion_pago` column:** backward-compat retry en `saveFactura`; migración `migration_condicion_pago.sql`
 - **`formatDolares` helper** agregado a `src/lib/utils.ts` para montos en USD
 
-### Fase 7 — Funcionalidades avanzadas
+### ✅ Fase 8 — PDF/Email cotizaciones, leyenda fiscal, teléfono (2026-04-21)
+- **Cotización Descargar PDF:** html2canvas + jsPDF, documento blanco off-screen `id="cotizacion-documento"`
+- **Cotización Enviar Correo:** modal igual al de facturas; plantilla HTML en `src/lib/email/cotizacion-html.ts` (montos en USD)
+- **Factura PDF fix:** `jsPDF` v4 usa `import { jsPDF } from "jspdf"` (named export, no default) — era el bug que impedía descargar
+- **Email facturas:** eliminado botón "Ver Factura en el Sistema" — el cliente no necesita acceso al sistema interno
+- **Leyenda fiscal:** reemplazado aviso RTN por **"LA FACTURA ES BENEFICIO DE TODOS EXÍJALA"** en documento e email
+- **Teléfono clientes:** auto-formato `+504 XXXX-XXXX` al escribir; validación regex `^\+504 \d{4}-\d{4}$`
+
+### Fase 9 — Funcionalidades avanzadas
 - [ ] Sincronización offline/online (Service Workers + IndexedDB)
 - [ ] Nuevos CAI — UI para actualizar rango cuando se agote
 - [ ] Control de acceso por rol (asistente no puede eliminar ni anular)
-- [ ] Sistemas adicionales (agenda, CRM, contable) — proyectos separados
 
 ### Configuraciones pendientes (manuales)
 - [ ] Ejecutar `migration_condicion_pago.sql` en Supabase SQL Editor: `ALTER TABLE dbc_facturas ADD COLUMN IF NOT EXISTS condicion_pago INTEGER;`
@@ -357,3 +364,9 @@ git push  # Vercel despliega automáticamente a producción desde main
 | Condición de pago 30/60/90 días | 2026-04-21 | ✅ |
 | Fix "Emitir Factura" no hacía nada | 2026-04-21 | ✅ |
 | migration_condicion_pago.sql (backward-compat retry) | 2026-04-21 | ✅ |
+| Cotización PDF download (html2canvas + jsPDF) | 2026-04-21 | ✅ |
+| Cotización Enviar Correo (Resend + HTML template) | 2026-04-21 | ✅ |
+| Factura PDF fix (jsPDF v4 named import) | 2026-04-21 | ✅ |
+| Leyenda "LA FACTURA ES BENEFICIO DE TODOS EXÍJALA" | 2026-04-21 | ✅ |
+| Eliminar "Ver Factura en el Sistema" del email | 2026-04-21 | ✅ |
+| Teléfono formato +504 XXXX-XXXX con validación | 2026-04-21 | ✅ |
