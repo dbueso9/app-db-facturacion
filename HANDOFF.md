@@ -1,7 +1,7 @@
 # HANDOFF — DB Consulting Facturación
 
-## Estado actual
-App de facturación en producción con autenticación completa, base de datos propia y deploy verificado.
+## Estado actual (2026-04-23)
+App de facturación en producción — Fase 9 completada: hitos de proyecto, fix PDF oklch, datos fiscales arriba.
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
@@ -50,78 +50,67 @@ src/
 ├── lib/
 │   ├── supabase.ts             # createServerClient(), createAuthClient(), getCurrentUser()
 │   ├── email/
-│   │   └── factura-html.ts     # ★ NUEVO: Template HTML para correos de facturas
+│   │   ├── factura-html.ts     # Template HTML correos facturas (datos fiscales arriba)
+│   │   └── cotizacion-html.ts  # Template HTML correos cotizaciones (montos USD)
 │   ├── actions/
-│   │   ├── clientes.ts         # getClientes, getCliente, saveCliente (con código DBC-XXX)
-│   │   ├── contratos.ts        # ★ NUEVO: getContratos, saveContrato, toggleActivo,
-│   │   │                       #   calcularMontoContrato, descripcionFacturaContrato
-│   │   ├── email.ts            # ★ NUEVO: enviarFactura, enviarFacturasAgrupadas (Resend)
-│   │   ├── facturas.ts         # getFacturas, getFactura, saveFactura (ampliado),
-│   │   │                       #   updateEstadoFactura, deleteFactura, crearNumeroFactura
+│   │   ├── clientes.ts         # getClientes, getCliente, saveCliente
+│   │   ├── contratos.ts        # getContratos, saveContrato, toggleActivo
+│   │   ├── email.ts            # enviarFactura, enviarFacturasAgrupadas, enviarCotizacion
+│   │   ├── facturas.ts         # getFacturas, getFactura, saveFactura, crearNumeroFactura
+│   │   ├── cotizaciones.ts     # getCotizaciones, getCotizacion, saveCotizacion, etc.
+│   │   ├── hitos.ts            # ★ NUEVO: getHitosForContratos, saveHitos, marcarHitoFacturado
 │   │   ├── servicios.ts        # getServicios, saveServicio, deleteServicio
-│   │   └── tasa-cambio.ts      # ★ NUEVO: getTasaCambio() — BCH Excel, cache 1h
+│   │   └── tasa-cambio.ts      # getTasaCambio() — BCH Excel, cache 1h
+│   ├── contratos-utils.ts      # calcularMontoContrato, descripcionFacturaContrato (sin "use server")
 │   ├── empresa.ts              # Datos fiscales fijos (CAI, RTN, rangos, ISV)
-│   ├── types.ts                # Tipos (ampliados: MetodoPago, Contrato, TipoContrato)
-│   └── utils.ts                # formatLempiras, formatFecha, generarId
+│   ├── types.ts                # Tipos — incluye Hito, EstadoHito (★ NUEVO)
+│   └── utils.ts                # formatLempiras, formatDolares, formatFecha, generarId
 ├── components/
 │   └── navbar.tsx              # Sticky nav con logo, usuario activo, badge de rol, logout
 └── app/
     ├── layout.tsx
     ├── login/
-    │   ├── page.tsx
-    │   └── actions.ts
     ├── page.tsx / dashboard-client.tsx
+    ├── reportes/
     ├── facturas/
-    │   ├── page.tsx
-    │   ├── facturas-client.tsx         # ★ Muestra nombreProyecto bajo el cliente
-    │   ├── nueva/
-    │   │   ├── page.tsx                # ★ Carga tasa de cambio BCH
-    │   │   └── nueva-client.tsx        # ★ Campos: nombreProyecto, metodoPago, vigencia 28d
-    │   └── [id]/
-    │       ├── page.tsx
-    │       ├── factura-detalle-client.tsx  # ★ Layout SAR, modal Enviar Correo, PDF mejorado
-    │       └── editar/
-    │           ├── page.tsx
-    │           └── editar-client.tsx   # ★ Columnas de líneas corregidas
+    │   ├── [id]/
+    │   │   └── factura-detalle-client.tsx  # PDF vía iframe+template (fix oklch), datos fiscales arriba
+    │   └── nueva/ + [id]/editar/
+    ├── cotizaciones/
+    │   ├── [id]/
+    │   │   └── cotizacion-detalle-client.tsx  # PDF vía iframe+template (fix oklch)
+    │   └── nueva/ + [id]/editar/
     ├── clientes/
-    │   ├── page.tsx
-    │   ├── clientes-client.tsx         # ★ Columna código, link a detalle
-    │   └── [id]/                       # ★ NUEVO
-    │       ├── page.tsx                # Carga cliente + contratos + facturas + tasa
-    │       └── cliente-detalle-client.tsx  # Resumen, contratos, historial, envío masivo
+    │   └── [id]/
+    │       ├── page.tsx                # Carga cliente + contratos + facturas + tasa + hitosMap + isAdmin
+    │       └── cliente-detalle-client.tsx  # ★ Hitos: editor, barra progreso a11y, generar factura por hito
     └── servicios/
-        ├── page.tsx
-        └── servicios-client.tsx
 scripts/
-├── setup-users.mjs
-├── nuevo-proyecto-supabase.sql
-└── ...
-migrations/                         # ★ NUEVO (archivos .sql en raíz del proyecto)
-├── migration_metodo_pago.sql       # ADD COLUMN metodo_pago
-├── migration_tasa_cambio.sql       # ADD COLUMN tasa_cambio
-└── migration_fase3.sql             # ADD COLUMN codigo (clientes), nombre_proyecto (facturas),
-                                    # CREATE TABLE dbc_contratos
+migrations (en raíz del proyecto):
+├── migration_metodo_pago.sql       ✅ ejecutada
+├── migration_tasa_cambio.sql       ✅ ejecutada
+├── migration_fase3.sql             ✅ ejecutada
+├── migration_condicion_pago.sql    ✅ ejecutada
+├── migration_fase6.sql             ✅ ejecutada
+└── migration_hitos.sql             ✅ ejecutada (2026-04-23)
 ```
 
 ---
 
 ## Base de datos (Supabase `omiodzulmcytponkhras`)
 
-| Tabla | Descripción | Nuevas columnas |
-|---|---|---|
-| `dbc_clientes` | Clientes con RTN, dirección, correo, teléfono | `codigo TEXT UNIQUE` (DBC-001) |
-| `dbc_servicios` | Catálogo de servicios | — |
-| `dbc_facturas` | Facturas con `cliente_data` JSONB | `metodo_pago`, `tasa_cambio`, `nombre_proyecto` |
-| `dbc_lineas_factura` | Líneas con FK CASCADE DELETE | — |
-| `dbc_contratos` | ★ NUEVA: contratos de servicio por cliente | cliente_id, tipo, valor_base, fecha_inicio, etc. |
+| Tabla | Descripción |
+|---|---|
+| `dbc_clientes` | Clientes con RTN, código DBC-XXX, correo, teléfono (+504 XXXX-XXXX) |
+| `dbc_servicios` | Catálogo de servicios con precio en USD |
+| `dbc_facturas` | Facturas LPS con metodo_pago, tasa_cambio, nombre_proyecto, condicion_pago |
+| `dbc_lineas_factura` | FK CASCADE DELETE a dbc_facturas |
+| `dbc_contratos` | Contratos por cliente: tipo, valor_base, dia_facturacion, activo |
+| `dbc_cotizaciones` | Cotizaciones USD: numero COT-XXX, estado, convertida_a_factura_id |
+| `dbc_lineas_cotizacion` | FK CASCADE DELETE a dbc_cotizaciones |
+| `dbc_hitos` | Hitos de proyecto: contrato_id, porcentaje, monto, estado, factura_id, orden |
 
-### Migraciones pendientes de ejecutar (si no se han ejecutado)
-Ejecutar en orden en Supabase SQL Editor:
-1. `migration_metodo_pago.sql`
-2. `migration_tasa_cambio.sql`
-3. `migration_fase3.sql` ← la más importante, incluye `dbc_contratos`
-
-RLS habilitada — solo usuarios autenticados tienen acceso.
+**Todas las migraciones ejecutadas ✅.** RLS habilitada — solo usuarios autenticados.
 
 ---
 
@@ -280,26 +269,30 @@ SUPABASE_SERVICE_ROLE_KEY=...
 - **`formatDolares` helper** agregado a `src/lib/utils.ts` para montos en USD
 
 ### ✅ Fase 8 — PDF/Email cotizaciones, leyenda fiscal, teléfono (2026-04-21)
-- **Cotización Descargar PDF:** html2canvas + jsPDF, documento blanco off-screen `id="cotizacion-documento"`
-- **Cotización Enviar Correo:** modal igual al de facturas; plantilla HTML en `src/lib/email/cotizacion-html.ts` (montos en USD)
-- **Factura PDF fix:** `jsPDF` v4 usa `import { jsPDF } from "jspdf"` (named export, no default) — era el bug que impedía descargar
-- **Email facturas:** eliminado botón "Ver Factura en el Sistema" — el cliente no necesita acceso al sistema interno
-- **Leyenda fiscal:** reemplazado aviso RTN por **"LA FACTURA ES BENEFICIO DE TODOS EXÍJALA"** en documento e email
-- **Teléfono clientes:** auto-formato `+504 XXXX-XXXX` al escribir; validación regex `^\+504 \d{4}-\d{4}$`
+- **Cotización Descargar PDF + Enviar Correo:** plantilla HTML en `src/lib/email/cotizacion-html.ts` (montos en USD)
+- **Factura PDF fix:** `import { jsPDF } from "jspdf"` (named export en v4)
+- **Email facturas:** eliminado botón "Ver Factura en el Sistema"
+- **Leyenda fiscal:** "LA FACTURA ES BENEFICIO DE TODOS EXÍJALA" en documento y email
+- **Teléfono clientes:** auto-formato `+504 XXXX-XXXX`, validación regex
 
-### Fase 9 — Funcionalidades avanzadas
-- [ ] Sincronización offline/online (Service Workers + IndexedDB)
-- [ ] Nuevos CAI — UI para actualizar rango cuando se agote
-- [ ] Control de acceso por rol (asistente no puede eliminar ni anular)
+### ✅ Fase 9 — Hitos de proyecto, fix PDF oklch, datos fiscales arriba (2026-04-23)
+- **Hitos de proyecto** en contratos tipo `proyecto_app`:
+  - Tabla `dbc_hitos` (migration_hitos.sql ✅ ejecutada)
+  - `src/lib/actions/hitos.ts`: `getHitosForContratos`, `saveHitos` (valida suma=100%), `marcarHitoFacturado`
+  - Tipos `Hito` / `EstadoHito` en `src/lib/types.ts`
+  - Editor visual con porcentajes, monto calculado, barra de progreso accesible (`role="progressbar"`)
+  - Botón "Generar Factura" por hito pendiente; hitos facturados quedan bloqueados
+  - Restricción de seguridad: si ya hay hitos facturados, solo `admin` puede editar
+  - `isAdmin` calculado server-side (`user.email === "admin@dbconsulting.hn"`) y pasado como prop
+- **Fix PDF oklch/lab (Tailwind v4):** `exportarPDF` reescrito para ambos documentos:
+  - Crea un `<iframe>` aislado, inyecta el HTML del template (inline styles, hex colors)
+  - html2canvas captura desde el iframe — nunca ve las variables `oklch()` del documento principal
+  - Elimina el error _"Attempting to parse an unsupported color function 'lab'"_
+- **Datos fiscales empresa arriba:** RTN, CAI, rango autorizado, fecha límite ahora en recuadro al inicio del documento de factura (en pantalla y en email)
 
-### Configuraciones pendientes (manuales)
-- [ ] Ejecutar `migration_condicion_pago.sql` en Supabase SQL Editor: `ALTER TABLE dbc_facturas ADD COLUMN IF NOT EXISTS condicion_pago INTEGER;`
-- [ ] Ejecutar `migration_fase6.sql` en Supabase SQL Editor (tablas cotizaciones)
-- [ ] Ejecutar `migration_fase3.sql` en Supabase SQL Editor (si no se ha hecho)
-- [ ] Configurar `RESEND_API_KEY` en `.env.local` y en Vercel env vars
-- [ ] Agregar dominio `dbconsulting.hn` en Resend y actualizar DNS
-- [ ] Actualizar `NEXT_PUBLIC_APP_URL` en Vercel con la URL de producción
-- [ ] Limpiar tablas `dbc_*` de mugdpos (ver pendiente original abajo)
+### Pendiente (acciones manuales)
+- [ ] Configurar dominio `dbconsulting.hn` en Resend (agregar 3 registros DNS) y cambiar `from` en `src/lib/actions/email.ts`
+- [ ] Limpiar tablas `dbc_*` del proyecto Supabase antiguo `bekolkmrxxbygbqauotb` (ver sección al final)
 
 ---
 
@@ -370,3 +363,8 @@ git push  # Vercel despliega automáticamente a producción desde main
 | Leyenda "LA FACTURA ES BENEFICIO DE TODOS EXÍJALA" | 2026-04-21 | ✅ |
 | Eliminar "Ver Factura en el Sistema" del email | 2026-04-21 | ✅ |
 | Teléfono formato +504 XXXX-XXXX con validación | 2026-04-21 | ✅ |
+| Hitos de proyecto (dbc_hitos, editor, barra progreso) | 2026-04-23 | ✅ |
+| migration_hitos.sql ejecutada en Supabase | 2026-04-23 | ✅ |
+| Fix PDF oklch — iframe aislado + HTML template | 2026-04-23 | ✅ |
+| Datos fiscales empresa en parte superior de factura | 2026-04-23 | ✅ |
+| Build producción + deploy Vercel Fase 9 | 2026-04-23 | ✅ |
