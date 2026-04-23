@@ -1,7 +1,7 @@
 # HANDOFF — DB Consulting Facturación
 
 ## Estado actual (2026-04-23)
-App de facturación en producción — Fase 9 completada: hitos de proyecto, fix PDF oklch, datos fiscales arriba.
+App de facturación en producción — Fase 10 + correcciones UX: confirmación de cambio de estado, PDF adjunto en correos, validez cotización 15 días, datos cliente en encabezado.
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
@@ -57,8 +57,9 @@ src/
 │   │   ├── contratos.ts        # getContratos, saveContrato, toggleActivo
 │   │   ├── email.ts            # enviarFactura, enviarFacturasAgrupadas, enviarCotizacion
 │   │   ├── facturas.ts         # getFacturas, getFactura, saveFactura, crearNumeroFactura
-│   │   ├── cotizaciones.ts     # getCotizaciones, getCotizacion, saveCotizacion, etc.
-│   │   ├── hitos.ts            # ★ NUEVO: getHitosForContratos, saveHitos, marcarHitoFacturado
+│   │   ├── cotizaciones.ts     # getCotizaciones, getCotizacion, saveCotizacion, marcarConvertidaAContrato
+│   │   ├── hitos.ts            # getHitosForContratos, saveHitos, marcarHitoFacturado
+│   │   ├── proyecto.ts         # ★ NUEVO: crearProyecto — crea contrato+hitos desde cotización
 │   │   ├── servicios.ts        # getServicios, saveServicio, deleteServicio
 │   │   └── tasa-cambio.ts      # getTasaCambio() — BCH Excel, cache 1h
 │   ├── contratos-utils.ts      # calcularMontoContrato, descripcionFacturaContrato (sin "use server")
@@ -92,7 +93,8 @@ migrations (en raíz del proyecto):
 ├── migration_fase3.sql             ✅ ejecutada
 ├── migration_condicion_pago.sql    ✅ ejecutada
 ├── migration_fase6.sql             ✅ ejecutada
-└── migration_hitos.sql             ✅ ejecutada (2026-04-23)
+├── migration_hitos.sql             ✅ ejecutada (2026-04-23)
+└── migration_fase10.sql            ⏳ PENDIENTE ejecutar en Supabase SQL Editor
 ```
 
 ---
@@ -108,7 +110,7 @@ migrations (en raíz del proyecto):
 | `dbc_contratos` | Contratos por cliente: tipo, valor_base, dia_facturacion, activo |
 | `dbc_cotizaciones` | Cotizaciones USD: numero COT-XXX, estado, convertida_a_factura_id |
 | `dbc_lineas_cotizacion` | FK CASCADE DELETE a dbc_cotizaciones |
-| `dbc_hitos` | Hitos de proyecto: contrato_id, porcentaje, monto, estado, factura_id, orden |
+| `dbc_hitos` | Hitos de proyecto: contrato_id, nombre, porcentaje, monto, estado, factura_id, orden |
 
 **Todas las migraciones ejecutadas ✅.** RLS habilitada — solo usuarios autenticados.
 
@@ -290,7 +292,40 @@ SUPABASE_SERVICE_ROLE_KEY=...
   - Elimina el error _"Attempting to parse an unsupported color function 'lab'"_
 - **Datos fiscales empresa arriba:** RTN, CAI, rango autorizado, fecha límite ahora en recuadro al inicio del documento de factura (en pantalla y en email)
 
+### ✅ Fase 10 — Tracking cobrado/emitido, estado proyecto, cotización → contrato (2026-04-23)
+- **`migration_fase10.sql`:** `ALTER TABLE dbc_cotizaciones ADD COLUMN convertida_a_contrato_id TEXT`
+- **`src/lib/actions/proyecto.ts`:** `crearProyecto()` — crea contrato tipo `proyecto_app` + hitos + marca cotización como aceptada, todo en secuencia
+- **`src/lib/actions/cotizaciones.ts`:** `marcarConvertidaAContrato()` + `convertidaAContratoId` en mapRow
+- **Cotización → Contrato con Hitos:** nuevo botón "Crear Contrato" en `/cotizaciones/[id]`:
+  - Dialog con nombre proyecto, valor calculado (USD→LPS a tasa BCH), fecha de inicio
+  - Editor de hitos (misma UI que en contratos): porcentaje, nombre, monto calculado
+  - Valida suma = 100%, nombres no vacíos
+  - Badge "Ver Proyecto" (violeta) enlaza al cliente cuando ya está convertida
+  - `yaConvertida` bloquea ambos botones si ya hay factura o contrato vinculado
+- **ProgresoHitos mejorado** en `/clientes/[id]`:
+  - Barra de dos capas: verde sólido = cobrado (factura Pagada) | verde translúcido = emitido no cobrado | gris = pendiente
+  - Badge de estado del proyecto: **Pendiente de inicio / En progreso / Facturado completo / Cerrado ✓**
+  - Métricas: Cobrado | Emitido (si hay diferencia) | Pendiente
+- **Filas de hito** con estado real de la factura:
+  - Punto naranja + badge "Emitida" → factura generada pero no pagada
+  - Punto verde + badge "Cobrado ✓" + tachado → factura pagada
+
+### ✅ Correcciones UX (2026-04-23)
+- **Confirmación cambio estado factura:** dialog genérico para TODOS los estados (no solo Anulada); muestra estado actual → nuevo estado; variante destructive para Anulada
+- **PDF adjunto en correos:**
+  - `src/lib/pdf-utils.ts`: `pdfBase64FromHtml(html)` — genera PDF via iframe+html2canvas, retorna base64
+  - `email.ts`: `enviarFactura`, `enviarCotizacion`, `enviarFacturasAgrupadas` aceptan `pdfBase64`/`pdfs` opcionales
+  - Facturas individuales y cotizaciones: generan PDF antes de enviar, adjuntan al correo Resend
+  - Envío masivo (cliente-detalle): genera un PDF por factura seleccionada (secuencial)
+  - Botón muestra "Preparando PDF..." mientras procesa
+- **Validez cotización 15 días:** nueva cotización por defecto con 15 días (antes 30)
+- **Leyenda validez prominente:** "ESTA COTIZACIÓN ES VÁLIDA HASTA EL [día] DE [MES] DE [año]" — visible en documento de pantalla y en email/PDF
+- **Datos cliente en encabezado cotización:**
+  - Email/PDF template: nombre + correo + teléfono del cliente ahora en el bloque derecho del header (negro)
+  - Vista de pantalla: correo y teléfono aparecen inmediatamente después del nombre (antes iban al final)
+
 ### Pendiente (acciones manuales)
+- [ ] **Ejecutar `migration_fase10.sql`** en Supabase SQL Editor (`omiodzulmcytponkhras`)
 - [ ] Configurar dominio `dbconsulting.hn` en Resend (agregar 3 registros DNS) y cambiar `from` en `src/lib/actions/email.ts`
 - [ ] Limpiar tablas `dbc_*` del proyecto Supabase antiguo `bekolkmrxxbygbqauotb` (ver sección al final)
 
@@ -368,3 +403,13 @@ git push  # Vercel despliega automáticamente a producción desde main
 | Fix PDF oklch — iframe aislado + HTML template | 2026-04-23 | ✅ |
 | Datos fiscales empresa en parte superior de factura | 2026-04-23 | ✅ |
 | Build producción + deploy Vercel Fase 9 | 2026-04-23 | ✅ |
+| Fase 10: ProgresoHitos cobrado/emitido/pendiente | 2026-04-23 | ✅ |
+| Fase 10: Badge estado proyecto (Cerrado/En progreso/etc.) | 2026-04-23 | ✅ |
+| Fase 10: Cotización → Crear Contrato con Hitos | 2026-04-23 | ✅ |
+| Fase 10: migration_fase10.sql (pendiente ejecutar) | 2026-04-23 | ⏳ |
+| Build TypeScript Fase 10 — 0 errores | 2026-04-23 | ✅ |
+| Confirmación de cambio de estado factura (todos los estados) | 2026-04-23 | ✅ |
+| PDF adjunto en correos (factura individual, cotización, masivo) | 2026-04-23 | ✅ |
+| Validez cotización 15 días + leyenda VÁLIDA HASTA prominente | 2026-04-23 | ✅ |
+| Datos cliente (correo) en encabezado cotización (pantalla + email) | 2026-04-23 | ✅ |
+| Build TypeScript correcciones UX — 0 errores | 2026-04-23 | ✅ |

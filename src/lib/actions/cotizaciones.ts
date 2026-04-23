@@ -33,6 +33,7 @@ function mapRow(row: Record<string, unknown>): Cotizacion {
     nombreProyecto: (row.nombre_proyecto as string) || undefined,
     notas: (row.notas as string) || "",
     convertidaAFacturaId: (row.convertida_a_factura_id as string) || undefined,
+    convertidaAContratoId: (row.convertida_a_contrato_id as string) || undefined,
     creadaEn: row.creada_en as string,
   };
 }
@@ -125,6 +126,15 @@ export async function marcarConvertida(id: string, facturaId: string): Promise<v
   const { error } = await supabase
     .from("dbc_cotizaciones")
     .update({ estado: "aceptada", convertida_a_factura_id: facturaId })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function marcarConvertidaAContrato(id: string, contratoId: string): Promise<void> {
+  const supabase = createServerClient();
+  const { error } = await supabase
+    .from("dbc_cotizaciones")
+    .update({ estado: "aceptada", convertida_a_contrato_id: contratoId })
     .eq("id", id);
   if (error) throw error;
 }

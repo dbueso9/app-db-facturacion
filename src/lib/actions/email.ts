@@ -17,7 +17,8 @@ export async function enviarFactura(
   factura: Factura,
   para: string,
   asunto: string,
-  mensaje: string
+  mensaje: string,
+  pdfBase64?: string
 ): Promise<EnvioResult> {
   try {
     const html = generarHtmlFactura(factura);
@@ -30,6 +31,9 @@ export async function enviarFactura(
       to: [para],
       subject: asunto,
       html: cuerpo,
+      attachments: pdfBase64
+        ? [{ filename: `${factura.numero}.pdf`, content: pdfBase64 }]
+        : undefined,
     });
 
     if (error) return { ok: false, error: error.message };
@@ -43,7 +47,8 @@ export async function enviarCotizacion(
   cotizacion: Cotizacion,
   para: string,
   asunto: string,
-  mensaje: string
+  mensaje: string,
+  pdfBase64?: string
 ): Promise<EnvioResult> {
   try {
     const html = generarHtmlCotizacion(cotizacion);
@@ -56,6 +61,9 @@ export async function enviarCotizacion(
       to: [para],
       subject: asunto,
       html: cuerpo,
+      attachments: pdfBase64
+        ? [{ filename: `${cotizacion.numero}.pdf`, content: pdfBase64 }]
+        : undefined,
     });
 
     if (error) return { ok: false, error: error.message };
@@ -69,12 +77,12 @@ export async function enviarFacturasAgrupadas(
   facturas: Factura[],
   para: string,
   asunto: string,
-  mensaje: string
+  mensaje: string,
+  pdfs?: { filename: string; content: string }[]
 ): Promise<EnvioResult> {
   if (facturas.length === 0) return { ok: false, error: "Sin facturas seleccionadas" };
 
   try {
-    // Build combined email: message + one invoice section per factura
     const secciones = facturas
       .map(
         (f) => `
@@ -93,6 +101,7 @@ export async function enviarFacturasAgrupadas(
       to: [para],
       subject: asunto,
       html: cuerpo,
+      attachments: pdfs?.length ? pdfs : undefined,
     });
 
     if (error) return { ok: false, error: error.message };

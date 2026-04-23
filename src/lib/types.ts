@@ -96,6 +96,7 @@ export interface Cotizacion {
   nombreProyecto?: string;
   notas: string;
   convertidaAFacturaId?: string;
+  convertidaAContratoId?: string;
   creadaEn: string;
 }
 

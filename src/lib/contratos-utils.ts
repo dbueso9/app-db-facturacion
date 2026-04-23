@@ -1,4 +1,5 @@
 import { Contrato } from "@/lib/types";
+import { MESES_LARGO } from "@/lib/utils";
 
 export function calcularMontoContrato(contrato: Contrato, año: number, mes: number): number {
   const inicio = new Date(contrato.fechaInicio + "T00:00:00");
@@ -18,8 +19,7 @@ export function calcularMontoContrato(contrato: Contrato, año: number, mes: num
 }
 
 export function descripcionFacturaContrato(contrato: Contrato, año: number, mes: number): string {
-  const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-  const mesNombre = MESES[mes - 1];
+  const mesNombre = MESES_LARGO[mes - 1];
 
   switch (contrato.tipo) {
     case "mantenimiento":

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray, Controller, Resolver } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,10 +48,10 @@ export default function NuevaCotizacionClient({
   const [guardando, setGuardando] = useState(false);
 
   const hoy = new Date().toISOString().split("T")[0];
-  const validez = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const validez = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(schema) as Resolver<FormValues>,
+    resolver: zodResolver(schema),
     defaultValues: {
       clienteId: "",
       fecha: hoy,

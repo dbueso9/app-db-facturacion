@@ -36,7 +36,7 @@ const BADGE_ESTADO: Record<EstadoFactura, { label: string; variant: "default" | 
 export default function FacturaDetalleClient({ factura }: { factura: Factura }) {
   const router = useRouter();
   const [estadoActual, setEstadoActual] = useState<EstadoFactura>(factura.estado);
-  const [confirmandoAnular, setConfirmandoAnular] = useState(false);
+  const [pendingState, setPendingState] = useState<EstadoFactura | null>(null);
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false);
   const [cambiando, setCambiando] = useState(false);
   const [eliminando, setEliminando] = useState(false);
@@ -58,39 +58,32 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
     setEnviando(true);
     setEnvioResultado(null);
     try {
-      const res = await enviarFactura(factura, emailPara.trim(), emailAsunto, emailMensaje);
-      setEnvioResultado({ ok: res.ok, msg: res.ok ? "Correo enviado correctamente" : res.error || "Error al enviar" });
+      const { generarHtmlFactura } = await import("@/lib/email/factura-html");
+      const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
+      const pdfBase64 = await pdfBase64FromHtml(generarHtmlFactura(factura));
+      const res = await enviarFactura(factura, emailPara.trim(), emailAsunto, emailMensaje, pdfBase64);
+      setEnvioResultado({ ok: res.ok, msg: res.ok ? "Correo enviado con PDF adjunto" : res.error || "Error al enviar" });
       if (res.ok) setTimeout(() => setModalEmail(false), 2000);
     } finally {
       setEnviando(false);
     }
   }
 
-  async function cambiarEstado(nuevoEstado: string | null) {
+  function cambiarEstado(nuevoEstado: string | null) {
     if (!nuevoEstado || nuevoEstado === estadoActual) return;
-    if (nuevoEstado === "anulada") {
-      setConfirmandoAnular(true);
-      return;
-    }
-    setCambiando(true);
-    try {
-      await updateEstadoFactura(factura.id, nuevoEstado as EstadoFactura);
-      setEstadoActual(nuevoEstado as EstadoFactura);
-      router.refresh();
-    } finally {
-      setCambiando(false);
-    }
+    setPendingState(nuevoEstado as EstadoFactura);
   }
 
-  async function confirmarAnular() {
+  async function confirmarCambioEstado() {
+    if (!pendingState) return;
     setCambiando(true);
-    setConfirmandoAnular(false);
     try {
-      await updateEstadoFactura(factura.id, "anulada");
-      setEstadoActual("anulada");
+      await updateEstadoFactura(factura.id, pendingState);
+      setEstadoActual(pendingState);
       router.refresh();
     } finally {
       setCambiando(false);
+      setPendingState(null);
     }
   }
 
@@ -448,24 +441,35 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
             <Button variant="outline" onClick={() => setModalEmail(false)}>Cancelar</Button>
             <Button onClick={enviarCorreo} disabled={!emailPara.trim() || enviando}>
               <Send className="h-4 w-4 mr-1" />
-              {enviando ? "Enviando..." : "Enviar"}
+              {enviando ? "Preparando PDF..." : "Enviar con PDF"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog confirmación anular */}
-      <Dialog open={confirmandoAnular} onOpenChange={setConfirmandoAnular}>
+      {/* Dialog confirmación cambio de estado */}
+      <Dialog open={!!pendingState} onOpenChange={(o) => { if (!o) setPendingState(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Anular factura</DialogTitle>
+            <DialogTitle>Cambiar estado de la factura</DialogTitle>
             <DialogDescription>
-              ¿Está seguro de que desea anular la factura <strong>{factura.numero}</strong>? Esta acción no se puede deshacer.
+              ¿Confirma cambiar el estado de <strong>{factura.numero}</strong> de{" "}
+              <strong>{BADGE_ESTADO[estadoActual].label}</strong> a{" "}
+              <strong>{pendingState ? BADGE_ESTADO[pendingState].label : ""}</strong>?
+              {pendingState === "anulada" && (
+                <span className="block mt-1 text-destructive font-medium">Esta acción no se puede deshacer.</span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmandoAnular(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmarAnular}>Anular factura</Button>
+            <Button variant="outline" onClick={() => setPendingState(null)}>Cancelar</Button>
+            <Button
+              variant={pendingState === "anulada" ? "destructive" : "default"}
+              onClick={confirmarCambioEstado}
+              disabled={cambiando}
+            >
+              {cambiando ? "Cambiando..." : "Confirmar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

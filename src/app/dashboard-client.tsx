@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Factura, Contrato, EstadoFactura } from "@/lib/types";
-import { formatLempiras, formatFecha } from "@/lib/utils";
+import { formatLempiras, formatFecha, MESES_CORTO } from "@/lib/utils";
 import { EMPRESA } from "@/lib/empresa";
 import { FileText, Plus, TrendingUp, Clock, CheckCircle, AlertCircle, BarChart2 } from "lucide-react";
 
@@ -18,8 +18,6 @@ const BADGE_ESTADO: Record<EstadoFactura, { label: string; variant: "default" | 
   pagada: { label: "Pagada", variant: "outline" },
   anulada: { label: "Anulada", variant: "destructive" },
 };
-
-const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 
 function ultimos6Meses(facturas: Factura[]) {
   const hoy = new Date();
@@ -32,7 +30,7 @@ function ultimos6Meses(facturas: Factura[]) {
       return fd.getFullYear() === año && fd.getMonth() === mes && f.estado !== "anulada";
     });
     return {
-      mes: MESES[mes],
+      mes: MESES_CORTO[mes],
       facturado: del.reduce((s, f) => s + f.total, 0),
       cobrado: del.filter((f) => f.estado === "pagada").reduce((s, f) => s + f.total, 0),
     };

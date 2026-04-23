@@ -11,14 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Factura, Cliente } from "@/lib/types";
-import { formatLempiras, formatFecha } from "@/lib/utils";
+import { formatLempiras, formatFecha, MESES_CORTO, MESES_LARGO } from "@/lib/utils";
 import { ArrowLeft, TrendingUp, CheckCircle, Clock, FileText } from "lucide-react";
 
-const MESES_NOMBRES = [
-  "Enero","Febrero","Marzo","Abril","Mayo","Junio",
-  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
-];
-const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const MESES_NOMBRES = MESES_LARGO;
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;

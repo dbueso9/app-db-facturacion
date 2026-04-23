@@ -15,14 +15,21 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { updateEstadoCotizacion, deleteCotizacion, marcarConvertida } from "@/lib/actions/cotizaciones";
+import { crearProyecto } from "@/lib/actions/proyecto";
 import { crearNumeroFactura, saveFactura } from "@/lib/actions/facturas";
 import { enviarCotizacion } from "@/lib/actions/email";
 import { Cotizacion, EstadoCotizacion, Factura } from "@/lib/types";
 import { TasaCambio } from "@/lib/actions/tasa-cambio";
 import { formatDolares, formatLempiras, formatFecha, generarId } from "@/lib/utils";
 import { EMPRESA } from "@/lib/empresa";
-import { ArrowLeft, Pencil, Trash2, Zap, FileText, AlertCircle, Download, Send, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, Zap, FileText, AlertCircle, Download, Send, CheckCircle, XCircle, Layers, Plus } from "lucide-react";
 import { jsPDF } from "jspdf";
+
+function formatValidezDestacado(fecha: string): string {
+  const d = new Date(fecha + "T00:00:00");
+  const mes = d.toLocaleString("es-HN", { month: "long" }).toUpperCase();
+  return `${d.getDate()} DE ${mes} DE ${d.getFullYear()}`;
+}
 
 const BADGE_ESTADO: Record<EstadoCotizacion, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   borrador: { label: "Borrador", variant: "secondary" },
@@ -32,6 +39,8 @@ const BADGE_ESTADO: Record<EstadoCotizacion, { label: string; variant: "default"
 };
 
 const ESTADOS_DISPONIBLES: EstadoCotizacion[] = ["borrador", "enviada", "aceptada", "rechazada"];
+
+type FormHito = { id: string; nombre: string; porcentaje: string };
 
 interface Props {
   cotizacion: Cotizacion;
@@ -58,8 +67,15 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
   const [enviando, setEnviando] = useState(false);
   const [envioResultado, setEnvioResultado] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  // Crear contrato con hitos
+  const [modalContrato, setModalContrato] = useState(false);
+  const [formProyecto, setFormProyecto] = useState({ nombreProyecto: "", fechaInicio: "", notas: "" });
+  const [formHitosContrato, setFormHitosContrato] = useState<FormHito[]>([]);
+  const [errorHitosContrato, setErrorHitosContrato] = useState<string | null>(null);
+  const [creandoContrato, setCreandoContrato] = useState(false);
+
   const estado = BADGE_ESTADO[estadoActual];
-  const yaConvertida = !!cotizacion.convertidaAFacturaId;
+  const yaConvertida = !!cotizacion.convertidaAFacturaId || !!cotizacion.convertidaAContratoId;
   const tasa = tasaCambio?.venta || 1;
 
   const montoLPS = formatLempiras(cotizacion.total * tasa);
@@ -183,13 +199,86 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
     }
   }
 
+  const valorBaseContrato = Number((cotizacion.total * tasa).toFixed(2));
+  const sumaHitosContrato = formHitosContrato.reduce((s, h) => s + (parseFloat(h.porcentaje) || 0), 0);
+
+  function abrirModalContrato() {
+    setFormProyecto({
+      nombreProyecto: cotizacion.nombreProyecto || "",
+      fechaInicio: new Date().toISOString().split("T")[0],
+      notas: cotizacion.notas || "",
+    });
+    setFormHitosContrato([
+      { id: generarId(), nombre: "Anticipo", porcentaje: "50" },
+      { id: generarId(), nombre: "Entrega Final", porcentaje: "50" },
+    ]);
+    setErrorHitosContrato(null);
+    setModalContrato(true);
+  }
+
+  function addHitoContratoRow() {
+    setFormHitosContrato((prev) => [...prev, { id: generarId(), nombre: "", porcentaje: "" }]);
+  }
+
+  function removeHitoContratoRow(idx: number) {
+    setFormHitosContrato((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateHitoContratoRow(idx: number, field: "nombre" | "porcentaje", value: string) {
+    setFormHitosContrato((prev) => prev.map((h, i) => (i === idx ? { ...h, [field]: value } : h)));
+  }
+
+  async function confirmarCrearContrato() {
+    if (!formProyecto.nombreProyecto.trim()) {
+      setErrorHitosContrato("El nombre del proyecto es requerido");
+      return;
+    }
+    if (Math.abs(sumaHitosContrato - 100) > 0.01) {
+      setErrorHitosContrato(`Los porcentajes deben sumar exactamente 100% (actualmente ${sumaHitosContrato.toFixed(2)}%)`);
+      return;
+    }
+    if (formHitosContrato.some((h) => !h.nombre.trim())) {
+      setErrorHitosContrato("Todos los hitos deben tener un nombre");
+      return;
+    }
+
+    setCreandoContrato(true);
+    setErrorHitosContrato(null);
+    try {
+      const hitos = formHitosContrato.map((h) => ({
+        id: h.id,
+        nombre: h.nombre.trim(),
+        porcentaje: parseFloat(h.porcentaje),
+        monto: Number(((valorBaseContrato * parseFloat(h.porcentaje)) / 100).toFixed(2)),
+      }));
+
+      await crearProyecto({
+        clienteId: cotizacion.clienteId,
+        nombreProyecto: formProyecto.nombreProyecto.trim(),
+        valorBase: valorBaseContrato,
+        fechaInicio: formProyecto.fechaInicio,
+        notas: formProyecto.notas,
+        cotizacionId: cotizacion.id,
+        hitos,
+      });
+
+      router.push(`/clientes/${cotizacion.clienteId}`);
+    } catch (err) {
+      setErrorHitosContrato(err instanceof Error ? err.message : "Error al crear el contrato");
+      setCreandoContrato(false);
+    }
+  }
+
   async function enviarCorreo() {
     if (!emailPara.trim()) return;
     setEnviando(true);
     setEnvioResultado(null);
     try {
-      const res = await enviarCotizacion(cotizacion, emailPara.trim(), emailAsunto, emailMensaje);
-      setEnvioResultado({ ok: res.ok, msg: res.ok ? "Correo enviado correctamente" : res.error || "Error al enviar" });
+      const { generarHtmlCotizacion } = await import("@/lib/email/cotizacion-html");
+      const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
+      const pdfBase64 = await pdfBase64FromHtml(generarHtmlCotizacion(cotizacion));
+      const res = await enviarCotizacion(cotizacion, emailPara.trim(), emailAsunto, emailMensaje, pdfBase64);
+      setEnvioResultado({ ok: res.ok, msg: res.ok ? "Correo enviado con PDF adjunto" : res.error || "Error al enviar" });
       if (res.ok) setTimeout(() => setModalEmail(false), 2000);
     } finally {
       setEnviando(false);
@@ -207,11 +296,19 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold font-mono">{cotizacion.numero}</h1>
             <Badge variant={estado.variant}>{estado.label}</Badge>
-            {yaConvertida && (
+            {cotizacion.convertidaAFacturaId && (
               <Link href={`/facturas/${cotizacion.convertidaAFacturaId}`}>
                 <Badge variant="outline" className="text-green-400 border-green-400 cursor-pointer hover:bg-green-400/10">
                   <FileText className="h-3 w-3 mr-1" />
                   Ver Factura
+                </Badge>
+              </Link>
+            )}
+            {cotizacion.convertidaAContratoId && (
+              <Link href={`/clientes/${cotizacion.clienteId}`}>
+                <Badge variant="outline" className="text-purple-400 border-purple-400 cursor-pointer hover:bg-purple-400/10">
+                  <Layers className="h-3 w-3 mr-1" />
+                  Ver Proyecto
                 </Badge>
               </Link>
             )}
@@ -245,10 +342,16 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           </Button>
 
           {!yaConvertida && estadoActual !== "rechazada" && (
-            <Button onClick={() => { setConfirmandoConvertir(true); setErrorConversion(null); }} disabled={convirtiendo}>
-              <Zap className="h-4 w-4 mr-1" />
-              Convertir en Factura
-            </Button>
+            <>
+              <Button variant="outline" onClick={abrirModalContrato} disabled={creandoContrato}>
+                <Layers className="h-4 w-4 mr-1" />
+                Crear Contrato
+              </Button>
+              <Button onClick={() => { setConfirmandoConvertir(true); setErrorConversion(null); }} disabled={convirtiendo}>
+                <Zap className="h-4 w-4 mr-1" />
+                Convertir en Factura
+              </Button>
+            </>
           )}
 
           {estadoActual === "borrador" && !yaConvertida && (
@@ -293,9 +396,18 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Para</p>
               <p className="font-bold text-lg">{cotizacion.cliente.nombre}</p>
-              {cotizacion.cliente.rtn && <p className="text-sm font-mono text-muted-foreground">RTN: {cotizacion.cliente.rtn}</p>}
-              {cotizacion.cliente.direccion && <p className="text-sm text-muted-foreground">{cotizacion.cliente.direccion}</p>}
-              {cotizacion.cliente.correo && <p className="text-sm text-muted-foreground">{cotizacion.cliente.correo}</p>}
+              {cotizacion.cliente.correo && (
+                <p className="text-sm font-medium text-foreground">{cotizacion.cliente.correo}</p>
+              )}
+              {cotizacion.cliente.telefono && (
+                <p className="text-sm text-muted-foreground">{cotizacion.cliente.telefono}</p>
+              )}
+              {cotizacion.cliente.rtn && (
+                <p className="text-sm font-mono text-muted-foreground">RTN: {cotizacion.cliente.rtn}</p>
+              )}
+              {cotizacion.cliente.direccion && (
+                <p className="text-sm text-muted-foreground">{cotizacion.cliente.direccion}</p>
+              )}
             </div>
           </div>
 
@@ -370,6 +482,11 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
               </div>
             </>
           )}
+
+          <Separator />
+          <div className="text-xs text-center font-bold border border-foreground/30 rounded px-3 py-2 bg-muted/30 uppercase tracking-wide">
+            ESTA COTIZACIÓN ES VÁLIDA HASTA EL {formatValidezDestacado(cotizacion.fechaValidez)}
+          </div>
         </CardContent>
       </Card>
 
@@ -419,6 +536,120 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
         </DialogContent>
       </Dialog>
 
+      {/* Dialog crear contrato con hitos */}
+      <Dialog open={modalContrato} onOpenChange={setModalContrato}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Crear Contrato con Plan de Pagos</DialogTitle>
+            <DialogDescription>
+              Se creará un contrato de proyecto con hitos de facturación independientes. Cada hito genera su propia factura al ser alcanzado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Nombre del Proyecto *</Label>
+              <Input
+                value={formProyecto.nombreProyecto}
+                onChange={(e) => setFormProyecto({ ...formProyecto, nombreProyecto: e.target.value })}
+                placeholder="Ej: Sistema de Inventario, Portal Web..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Valor del Proyecto</Label>
+                <div className="flex items-center h-9 px-3 border rounded-md bg-muted/50 text-sm font-mono text-muted-foreground">
+                  {new Intl.NumberFormat("es-HN", { style: "currency", currency: "HNL", minimumFractionDigits: 2 }).format(valorBaseContrato)}
+                </div>
+                {tasaCambio && (
+                  <p className="text-xs text-muted-foreground">Tasa BCH: L.{tasaCambio.venta.toFixed(4)} · {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cotizacion.total)} convertidos</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label>Fecha de Inicio *</Label>
+                <Input
+                  type="date"
+                  value={formProyecto.fechaInicio}
+                  onChange={(e) => setFormProyecto({ ...formProyecto, fechaInicio: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <Separator />
+            <p className="text-sm font-medium">Plan de Pagos (Hitos)</p>
+
+            <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
+              <span className="col-span-6">Nombre del Hito</span>
+              <span className="col-span-3 text-center">%</span>
+              <span className="col-span-2 text-right">Monto</span>
+              <span className="col-span-1"></span>
+            </div>
+
+            {formHitosContrato.map((h, idx) => {
+              const pct = parseFloat(h.porcentaje) || 0;
+              const monto = (valorBaseContrato * pct) / 100;
+              return (
+                <div key={h.id} className="grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-6">
+                    <Input
+                      value={h.nombre}
+                      onChange={(e) => updateHitoContratoRow(idx, "nombre", e.target.value)}
+                      placeholder="Ej: Anticipo, Pruebas UAT..."
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={h.porcentaje}
+                      onChange={(e) => updateHitoContratoRow(idx, "porcentaje", e.target.value)}
+                      className="h-8 text-sm text-center"
+                    />
+                  </div>
+                  <div className="col-span-2 text-right text-xs font-mono text-muted-foreground">
+                    {new Intl.NumberFormat("es-HN", { style: "currency", currency: "HNL", minimumFractionDigits: 0 }).format(monto)}
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeHitoContratoRow(idx)}>
+                      <XCircle className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+
+            <Button type="button" variant="outline" size="sm" onClick={addHitoContratoRow} className="w-full">
+              <Plus className="h-4 w-4 mr-1" />
+              Agregar Hito
+            </Button>
+
+            <div className={`flex items-center justify-between text-sm px-2 py-1.5 rounded ${Math.abs(sumaHitosContrato - 100) < 0.01 ? "bg-green-50/10 text-green-500" : "bg-red-950/30 text-red-400"}`}>
+              <span>Suma de porcentajes</span>
+              <span className="font-mono font-bold">{sumaHitosContrato.toFixed(2)}% / 100%</span>
+            </div>
+
+            {errorHitosContrato && (
+              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-950/30 border border-red-800 rounded px-3 py-2">
+                <XCircle className="h-4 w-4 shrink-0" />
+                {errorHitosContrato}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalContrato(false)}>Cancelar</Button>
+            <Button
+              onClick={confirmarCrearContrato}
+              disabled={creandoContrato || Math.abs(sumaHitosContrato - 100) > 0.01 || !formProyecto.nombreProyecto.trim() || !formProyecto.fechaInicio}
+            >
+              <Layers className="h-4 w-4 mr-1" />
+              {creandoContrato ? "Creando..." : "Crear Contrato con Hitos"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog enviar por correo */}
       <Dialog open={modalEmail} onOpenChange={(o) => { setModalEmail(o); setEnvioResultado(null); }}>
         <DialogContent className="max-w-md">
@@ -463,7 +694,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
             <Button variant="outline" onClick={() => setModalEmail(false)}>Cancelar</Button>
             <Button onClick={enviarCorreo} disabled={!emailPara.trim() || enviando}>
               <Send className="h-4 w-4 mr-1" />
-              {enviando ? "Enviando..." : "Enviar"}
+              {enviando ? "Preparando PDF..." : "Enviar con PDF"}
             </Button>
           </DialogFooter>
         </DialogContent>

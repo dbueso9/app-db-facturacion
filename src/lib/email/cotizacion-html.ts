@@ -9,6 +9,12 @@ function fecha(s: string): string {
   return new Date(s + "T00:00:00").toLocaleDateString("es-HN", { year: "numeric", month: "long", day: "numeric" });
 }
 
+function fechaDestacada(s: string): string {
+  const d = new Date(s + "T00:00:00");
+  const mes = d.toLocaleString("es-HN", { month: "long" }).toUpperCase();
+  return `${d.getDate()} DE ${mes} DE ${d.getFullYear()}`;
+}
+
 const ESTADO_LABEL: Record<string, string> = {
   borrador: "Borrador",
   enviada: "Enviada",
@@ -52,6 +58,13 @@ export function generarHtmlCotizacion(cotizacion: Cotizacion): string {
         <p style="margin:4px 0 0;color:#9ca3af;font-family:monospace;font-size:13px">${cotizacion.numero}</p>
         ${cotizacion.nombreProyecto ? `<p style="margin:4px 0 0;color:#d1d5db;font-size:13px;font-weight:600">${cotizacion.nombreProyecto}</p>` : ""}
         <p style="margin:8px 0 0;display:inline-block;background:${estadoColor};color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px">${ESTADO_LABEL[cotizacion.estado] || cotizacion.estado}</p>
+        <!-- Datos del destinatario en el encabezado -->
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid #374151">
+          <p style="margin:0;font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px">Para</p>
+          <p style="margin:3px 0 0;color:#f9fafb;font-weight:700;font-size:15px">${cotizacion.cliente.nombre}</p>
+          ${cotizacion.cliente.correo ? `<p style="margin:2px 0 0;color:#9ca3af;font-size:12px">${cotizacion.cliente.correo}</p>` : ""}
+          ${cotizacion.cliente.telefono ? `<p style="margin:2px 0 0;color:#9ca3af;font-size:12px">${cotizacion.cliente.telefono}</p>` : ""}
+        </div>
       </div>
     </div>
 
@@ -136,9 +149,11 @@ export function generarHtmlCotizacion(cotizacion: Cotizacion): string {
 
     <!-- Footer -->
     <div style="padding:20px 40px;background:#f8fafc;border-top:1px solid #e5e7eb">
-      <p style="margin:0;font-size:13px;font-weight:700;text-align:center;color:#111827;letter-spacing:.5px;text-transform:uppercase">
-        Esta cotización es válida hasta el ${fecha(cotizacion.fechaValidez)}
-      </p>
+      <div style="border:2px solid #111827;border-radius:8px;padding:10px 16px;text-align:center;margin-bottom:16px;background:#fff">
+        <p style="margin:0;font-size:13px;font-weight:700;color:#111827;letter-spacing:.8px;text-transform:uppercase">
+          ESTA COTIZACIÓN ES VÁLIDA HASTA EL ${fechaDestacada(cotizacion.fechaValidez)}
+        </p>
+      </div>
       <p style="margin:12px 0 0;font-size:11px;text-align:center;color:#9ca3af">
         ${EMPRESA.nombre} · RTN ${EMPRESA.rtn} · ${EMPRESA.correo} · Tel: ${EMPRESA.telefono}
       </p>

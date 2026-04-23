@@ -58,34 +58,71 @@ interface Props {
   isAdmin: boolean;
 }
 
-function ProgresoHitos({ hitos, valorBase }: { hitos: Hito[]; valorBase: number }) {
+function ProgresoHitos({ hitos, valorBase, facturas }: { hitos: Hito[]; valorBase: number; facturas: Factura[] }) {
+  const facturaById = new Map(facturas.map((f) => [f.id, f]));
   const totalMonto = hitos.reduce((s, h) => s + h.monto, 0);
   const facturado = hitos.filter((h) => h.estado === "facturado").reduce((s, h) => s + h.monto, 0);
+  const cobrado = hitos
+    .filter((h) => h.estado === "facturado" && h.facturaId && facturaById.get(h.facturaId)?.estado === "pagada")
+    .reduce((s, h) => s + h.monto, 0);
   const pendiente = totalMonto - facturado;
-  const pct = totalMonto > 0 ? Math.round((facturado / totalMonto) * 100) : 0;
+  const pctFacturado = totalMonto > 0 ? (facturado / totalMonto) * 100 : 0;
+  const pctCobrado = totalMonto > 0 ? (cobrado / totalMonto) * 100 : 0;
+
+  const todosPagados =
+    hitos.length > 0 &&
+    hitos.every((h) => h.estado === "facturado" && h.facturaId && facturaById.get(h.facturaId)?.estado === "pagada");
+  const todosFacturados = hitos.length > 0 && hitos.every((h) => h.estado === "facturado");
+  const algunoFacturado = hitos.some((h) => h.estado === "facturado");
+
+  let statusLabel = "Pendiente de inicio";
+  let statusClass = "text-muted-foreground bg-muted/40";
+  if (todosPagados) {
+    statusLabel = "Cerrado ✓";
+    statusClass = "text-green-700 bg-green-100/20 border border-green-500/30";
+  } else if (todosFacturados) {
+    statusLabel = "Facturado completo";
+    statusClass = "text-blue-400 bg-blue-100/10 border border-blue-400/30";
+  } else if (algunoFacturado) {
+    statusLabel = "En progreso";
+    statusClass = "text-amber-500 bg-amber-100/10 border border-amber-400/30";
+  }
 
   return (
-    <div className="mt-3 space-y-1">
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>Progreso de facturación</span>
-        <span className="font-semibold text-foreground">{pct}%</span>
+    <div className="mt-3 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">Progreso de facturación</span>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusClass}`}>{statusLabel}</span>
       </div>
       <div
         role="progressbar"
-        aria-valuenow={pct}
+        aria-valuenow={Math.round(pctFacturado)}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={`Progreso del proyecto: ${pct}% facturado (${formatLempiras(facturado)} de ${formatLempiras(totalMonto)})`}
-        className="h-2 bg-muted rounded-full overflow-hidden"
+        aria-label={`Progreso del proyecto: ${Math.round(pctFacturado)}% facturado, ${Math.round(pctCobrado)}% cobrado`}
+        className="h-2 bg-muted rounded-full overflow-hidden relative"
       >
         <div
-          className="h-full bg-green-500 rounded-full transition-all duration-300"
-          style={{ width: `${pct}%` }}
+          className="absolute inset-y-0 left-0 bg-green-400/40 rounded-full transition-all duration-300"
+          style={{ width: `${pctFacturado}%` }}
+        />
+        <div
+          className="absolute inset-y-0 left-0 bg-green-500 rounded-full transition-all duration-300"
+          style={{ width: `${pctCobrado}%` }}
         />
       </div>
-      <div className="flex justify-between text-xs">
-        <span className="text-green-600">Facturado: <span className="font-mono font-semibold">{formatLempiras(facturado)}</span></span>
-        <span className="text-muted-foreground">Pendiente: <span className="font-mono">{formatLempiras(pendiente)}</span></span>
+      <div className="flex justify-between text-xs gap-2 flex-wrap">
+        <span className="text-green-500">
+          Cobrado: <span className="font-mono font-semibold">{formatLempiras(cobrado)}</span>
+        </span>
+        {facturado > cobrado && (
+          <span className="text-amber-500">
+            Emitido: <span className="font-mono">{formatLempiras(facturado - cobrado)}</span>
+          </span>
+        )}
+        <span className="text-muted-foreground">
+          Pendiente: <span className="font-mono">{formatLempiras(pendiente)}</span>
+        </span>
       </div>
       {totalMonto !== valorBase && (
         <p className="text-xs text-amber-600">⚠ Los hitos suman {formatLempiras(totalMonto)} (base del contrato: {formatLempiras(valorBase)})</p>
@@ -333,8 +370,15 @@ export default function ClienteDetalleClient({
     setEnviando(true);
     setEnvioResultado(null);
     try {
-      const res = await enviarFacturasAgrupadas(seleccionadas, emailPara.trim(), emailAsunto, emailMensaje);
-      setEnvioResultado({ ok: res.ok, msg: res.ok ? `${seleccionadas.length} factura(s) enviadas` : res.error || "Error al enviar" });
+      const { generarHtmlFactura } = await import("@/lib/email/factura-html");
+      const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
+      const pdfs: { filename: string; content: string }[] = [];
+      for (const f of seleccionadas) {
+        const base64 = await pdfBase64FromHtml(generarHtmlFactura(f));
+        pdfs.push({ filename: `${f.numero}.pdf`, content: base64 });
+      }
+      const res = await enviarFacturasAgrupadas(seleccionadas, emailPara.trim(), emailAsunto, emailMensaje, pdfs);
+      setEnvioResultado({ ok: res.ok, msg: res.ok ? `${seleccionadas.length} factura(s) enviadas con PDF adjunto` : res.error || "Error al enviar" });
       if (res.ok) { setFacturasSeleccionadas(new Set()); setTimeout(() => setModalEmail(false), 2000); }
     } finally {
       setEnviando(false);
@@ -445,13 +489,23 @@ export default function ClienteDetalleClient({
                           <div className="mt-3">
                             {tieneHitos ? (
                               <>
-                                <ProgresoHitos hitos={hitos} valorBase={c.valorBase} />
+                                <ProgresoHitos hitos={hitos} valorBase={c.valorBase} facturas={facturas} />
                                 <div className="mt-3 space-y-1">
-                                  {hitos.map((h) => (
+                                  {hitos.map((h) => {
+                                    const facturaHito = h.facturaId ? facturas.find((f) => f.id === h.facturaId) : undefined;
+                                    const esPagada = facturaHito?.estado === "pagada";
+                                    return (
                                     <div key={h.id} className="flex items-center justify-between text-sm py-1 border-b border-muted last:border-0">
                                       <div className="flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full ${h.estado === "facturado" ? "bg-green-500" : "bg-muted-foreground/40"}`} aria-hidden="true" />
-                                        <span className={h.estado === "facturado" ? "line-through text-muted-foreground" : ""}>{h.nombre}</span>
+                                        <span
+                                          className={`w-2 h-2 rounded-full ${
+                                            h.estado === "facturado"
+                                              ? esPagada ? "bg-green-500" : "bg-amber-400"
+                                              : "bg-muted-foreground/40"
+                                          }`}
+                                          aria-hidden="true"
+                                        />
+                                        <span className={h.estado === "facturado" && esPagada ? "line-through text-muted-foreground" : ""}>{h.nombre}</span>
                                         <span className="text-xs text-muted-foreground">{h.porcentaje}%</span>
                                       </div>
                                       <div className="flex items-center gap-2">
@@ -459,8 +513,16 @@ export default function ClienteDetalleClient({
                                         {h.estado === "facturado" ? (
                                           h.facturaId ? (
                                             <Link href={`/facturas/${h.facturaId}`}>
-                                              <Badge variant="outline" className="text-green-600 border-green-600 text-xs cursor-pointer hover:bg-green-50">
-                                                <CheckCircle className="h-3 w-3 mr-1" />Facturado
+                                              <Badge
+                                                variant="outline"
+                                                className={`text-xs cursor-pointer ${
+                                                  esPagada
+                                                    ? "text-green-600 border-green-600 hover:bg-green-50/20"
+                                                    : "text-amber-500 border-amber-500 hover:bg-amber-50/20"
+                                                }`}
+                                              >
+                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                {esPagada ? "Cobrado ✓" : "Emitida"}
                                               </Badge>
                                             </Link>
                                           ) : (
@@ -482,7 +544,8 @@ export default function ClienteDetalleClient({
                                         )}
                                       </div>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </>
                             ) : (
@@ -792,7 +855,7 @@ export default function ClienteDetalleClient({
             <Button variant="outline" onClick={() => setModalEmail(false)}>Cancelar</Button>
             <Button onClick={enviarSeleccionadas} disabled={facturasSeleccionadas.size === 0 || !emailPara.trim() || enviando}>
               <Send className="h-4 w-4 mr-1" />
-              {enviando ? "Enviando..." : `Enviar ${facturasSeleccionadas.size > 1 ? `(${facturasSeleccionadas.size})` : ""}`}
+              {enviando ? "Preparando PDFs..." : `Enviar con PDF${facturasSeleccionadas.size > 1 ? ` (${facturasSeleccionadas.size})` : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>

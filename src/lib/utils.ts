@@ -32,3 +32,6 @@ export function formatDolares(valor: number): string {
 export function generarId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
+
+export const MESES_CORTO = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+export const MESES_LARGO = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
