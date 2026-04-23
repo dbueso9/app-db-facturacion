@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -109,17 +108,32 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
   async function exportarPDF() {
     setExportandoPdf(true);
     setErrorPdf(null);
+    let iframe: HTMLIFrameElement | null = null;
     try {
       const html2canvas = (await import("html2canvas")).default;
-      const el = document.getElementById("factura-documento");
-      if (!el) { setErrorPdf("No se encontró el documento"); return; }
-      const canvas = await html2canvas(el, {
+      const { generarHtmlFactura } = await import("@/lib/email/factura-html");
+
+      iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;height:1200px;border:none;";
+      document.body.appendChild(iframe);
+
+      await new Promise<void>((resolve) => {
+        iframe!.onload = () => resolve();
+        iframe!.srcdoc = generarHtmlFactura(factura);
+        setTimeout(resolve, 700);
+      });
+
+      const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
+      if (!iframeDoc) throw new Error("No se pudo acceder al documento");
+
+      const canvas = await html2canvas(iframeDoc.body, {
         scale: 2,
         useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
+        backgroundColor: "#f8fafc",
         logging: false,
+        windowWidth: 794,
       });
+
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pdfW = pdf.internal.pageSize.getWidth();
@@ -134,6 +148,7 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
     } catch (err) {
       setErrorPdf(err instanceof Error ? err.message : "Error al generar PDF");
     } finally {
+      if (iframe?.parentNode) iframe.parentNode.removeChild(iframe);
       setExportandoPdf(false);
     }
   }
@@ -198,7 +213,7 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
       <div id="factura-documento" className="bg-white text-black max-w-3xl mx-auto p-10 shadow-lg print:shadow-none print:p-6 rounded-lg">
 
         {/* Encabezado empresa */}
-        <div className="flex justify-between items-start mb-8">
+        <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-4">
             <Image
               src="/Logo DB.png"
@@ -226,22 +241,40 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
           </div>
         </div>
 
-        <Separator className="my-6 bg-gray-200" />
+        {/* Datos fiscales empresa — arriba */}
+        <div className="border-2 border-gray-800 rounded-lg p-3 mb-4 bg-gray-50 text-xs">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+            <div>
+              <span className="font-semibold text-gray-700">RTN: </span>
+              <span className="font-mono font-bold text-gray-900">{EMPRESA.rtn}</span>
+            </div>
+            <div>
+              <span className="font-semibold text-gray-700">Fecha Límite Emisión: </span>
+              <span className="text-gray-800">{EMPRESA.fechaLimiteEmision}</span>
+            </div>
+            <div className="col-span-2">
+              <span className="font-semibold text-gray-700">CAI: </span>
+              <span className="font-mono text-gray-800">{EMPRESA.cai}</span>
+            </div>
+            <div>
+              <span className="font-semibold text-gray-700">Rango Autorizado Desde: </span>
+              <span className="font-mono text-gray-800">N.{EMPRESA.rangoDesde}</span>
+            </div>
+            <div>
+              <span className="font-semibold text-gray-700">Rango Autorizado Hasta: </span>
+              <span className="font-mono text-gray-800">N.{EMPRESA.rangoHasta}</span>
+            </div>
+          </div>
+        </div>
 
-        {/* Datos fiscales — emisor y fechas */}
+        {/* Fechas y número */}
         <div className="grid grid-cols-2 gap-6 mb-4 text-sm border border-gray-200 rounded-lg p-4">
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Emisor</p>
-            <p className="font-bold text-gray-900">{EMPRESA.nombre}</p>
-            <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">RTN</p>
-            <p className="font-mono font-semibold text-gray-800">{EMPRESA.rtn}</p>
-            <p className="text-xs text-gray-500 uppercase tracking-wide mt-1">Dirección</p>
-            <p className="text-gray-700">{EMPRESA.direccion}</p>
-          </div>
-          <div className="space-y-1 text-right">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Fecha de Emisión</p>
             <p className="font-semibold text-gray-900">{formatFecha(factura.fecha)}</p>
-            <p className="text-xs text-gray-500 uppercase tracking-wide mt-2">Fecha de Vencimiento</p>
+          </div>
+          <div className="space-y-1 text-right">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Fecha de Vencimiento</p>
             <p className="font-semibold text-gray-900">{formatFecha(factura.fechaVencimiento)}</p>
             <p className="text-xs text-gray-500 uppercase tracking-wide mt-2">No. de Factura</p>
             <p className="font-mono font-bold text-gray-900">{factura.numero}</p>
@@ -360,30 +393,12 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
           LA FACTURA ES BENEFICIO DE TODOS EXÍJALA
         </div>
 
-        {/* Footer CAI / datos fiscales SAR */}
-        <div className="text-xs text-gray-600 border-t border-gray-300 pt-4 space-y-2">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-            <div>
-              <span className="font-semibold text-gray-700">CAI: </span>
-              <span className="font-mono">{EMPRESA.cai}</span>
-            </div>
-            <div>
-              <span className="font-semibold text-gray-700">Fecha Límite de Emisión: </span>
-              <span>{EMPRESA.fechaLimiteEmision}</span>
-            </div>
-            <div>
-              <span className="font-semibold text-gray-700">Rango Autorizado Desde: </span>
-              <span className="font-mono">N.{EMPRESA.rangoDesde}</span>
-            </div>
-            <div>
-              <span className="font-semibold text-gray-700">Rango Autorizado Hasta: </span>
-              <span className="font-mono">N.{EMPRESA.rangoHasta}</span>
-            </div>
-          </div>
-          <p className="text-center text-gray-400 pt-2">
+        {/* Footer */}
+        <div className="text-xs text-gray-500 border-t border-gray-300 pt-4 text-center space-y-1">
+          <p className="text-gray-400">
             {EMPRESA.nombre} · RTN {EMPRESA.rtn} · {EMPRESA.correo} · Tel: {EMPRESA.telefono}
           </p>
-          <p className="text-center text-gray-300 text-[10px]">
+          <p className="text-gray-300 text-[10px]">
             Sistema de Facturación desarrollado por DB Consulting © {new Date().getFullYear()}
           </p>
         </div>

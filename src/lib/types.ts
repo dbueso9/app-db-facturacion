@@ -56,6 +56,20 @@ export interface Factura {
   creadaEn: string;
 }
 
+export type EstadoHito = "pendiente" | "facturado";
+
+export interface Hito {
+  id: string;
+  contratoId: string;
+  nombre: string;
+  porcentaje: number;
+  monto: number;
+  estado: EstadoHito;
+  facturaId?: string;
+  orden: number;
+  creadoEn: string;
+}
+
 export type EstadoCotizacion = "borrador" | "enviada" | "aceptada" | "rechazada";
 
 export interface LineaCotizacion {

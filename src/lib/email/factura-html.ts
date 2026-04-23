@@ -39,12 +39,24 @@ export function generarHtmlFactura(factura: Factura): string {
       <div>
         <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700">${EMPRESA.nombre}</h1>
         <p style="margin:4px 0 0;color:#9ca3af;font-size:13px">${EMPRESA.direccion}</p>
-        <p style="margin:2px 0 0;color:#9ca3af;font-size:13px">RTN: ${EMPRESA.rtn}</p>
+        <p style="margin:2px 0 0;color:#9ca3af;font-size:13px">Tel: ${EMPRESA.telefono}</p>
+        <p style="margin:2px 0 0;color:#9ca3af;font-size:13px">${EMPRESA.correo}</p>
       </div>
       <div style="text-align:right">
         <p style="margin:0;color:#fff;font-size:26px;font-weight:700;letter-spacing:1px">FACTURA</p>
         <p style="margin:4px 0 0;color:#9ca3af;font-family:monospace;font-size:13px">${factura.numero}</p>
         ${factura.nombreProyecto ? `<p style="margin:4px 0 0;color:#d1d5db;font-size:13px;font-weight:600">${factura.nombreProyecto}</p>` : ""}
+      </div>
+    </div>
+
+    <!-- Datos fiscales empresa -->
+    <div style="background:#f0f0f0;padding:10px 40px;border-bottom:2px solid #111827;font-size:11px;color:#111827">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 32px">
+        <div><strong>RTN:</strong> <span style="font-family:monospace;font-weight:700">${EMPRESA.rtn}</span></div>
+        <div><strong>Fecha Límite Emisión:</strong> ${EMPRESA.fechaLimiteEmision}</div>
+        <div style="grid-column:1/-1"><strong>CAI:</strong> <span style="font-family:monospace">${EMPRESA.cai}</span></div>
+        <div><strong>Rango Desde:</strong> <span style="font-family:monospace">N.${EMPRESA.rangoDesde}</span></div>
+        <div><strong>Rango Hasta:</strong> <span style="font-family:monospace">N.${EMPRESA.rangoHasta}</span></div>
       </div>
     </div>
 
@@ -116,19 +128,12 @@ export function generarHtmlFactura(factura: Factura): string {
       </div>
     </div>
 
-    <!-- Footer CAI -->
+    <!-- Footer -->
     <div style="padding:20px 40px;background:#f8fafc;border-top:1px solid #e5e7eb">
       <p style="margin:0;font-size:13px;font-weight:700;text-align:center;color:#111827;letter-spacing:.5px;text-transform:uppercase">
         LA FACTURA ES BENEFICIO DE TODOS EXÍJALA
       </p>
-      <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:11px;color:#9ca3af">
-        <span><strong>CAI:</strong> ${EMPRESA.cai}</span>
-        <span><strong>Límite:</strong> ${EMPRESA.fechaLimiteEmision}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:11px;color:#9ca3af;font-family:monospace">
-        <span>Rango: N.${EMPRESA.rangoDesde} al N.${EMPRESA.rangoHasta}</span>
-        ${factura.tasaCambio ? `<span>Tasa BCH: L.${factura.tasaCambio.toFixed(4)}/USD</span>` : ""}
-      </div>
+      ${factura.tasaCambio ? `<p style="margin:8px 0 0;font-size:11px;text-align:center;color:#9ca3af">Tasa de cambio BCH: L.${factura.tasaCambio.toFixed(4)}/USD</p>` : ""}
       <p style="margin:12px 0 0;font-size:11px;text-align:center;color:#9ca3af">
         ${EMPRESA.nombre} · RTN ${EMPRESA.rtn} · ${EMPRESA.correo} · Tel: ${EMPRESA.telefono}
       </p>

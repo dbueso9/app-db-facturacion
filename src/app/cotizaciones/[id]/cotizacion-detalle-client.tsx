@@ -138,17 +138,32 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
   async function exportarPDF() {
     setExportandoPdf(true);
     setErrorPdf(null);
+    let iframe: HTMLIFrameElement | null = null;
     try {
       const html2canvas = (await import("html2canvas")).default;
-      const el = document.getElementById("cotizacion-documento");
-      if (!el) { setErrorPdf("No se encontró el documento"); return; }
-      const canvas = await html2canvas(el, {
+      const { generarHtmlCotizacion } = await import("@/lib/email/cotizacion-html");
+
+      iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;height:1200px;border:none;";
+      document.body.appendChild(iframe);
+
+      await new Promise<void>((resolve) => {
+        iframe!.onload = () => resolve();
+        iframe!.srcdoc = generarHtmlCotizacion(cotizacion);
+        setTimeout(resolve, 700);
+      });
+
+      const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
+      if (!iframeDoc) throw new Error("No se pudo acceder al documento");
+
+      const canvas = await html2canvas(iframeDoc.body, {
         scale: 2,
         useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
+        backgroundColor: "#f8fafc",
         logging: false,
+        windowWidth: 794,
       });
+
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pdfW = pdf.internal.pageSize.getWidth();
@@ -163,6 +178,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
     } catch (err) {
       setErrorPdf(err instanceof Error ? err.message : "Error al generar PDF");
     } finally {
+      if (iframe?.parentNode) iframe.parentNode.removeChild(iframe);
       setExportandoPdf(false);
     }
   }
@@ -356,126 +372,6 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           )}
         </CardContent>
       </Card>
-
-      {/* Documento oculto para PDF — fondo blanco, texto negro */}
-      <div
-        id="cotizacion-documento"
-        style={{
-          position: "absolute",
-          left: "-9999px",
-          top: 0,
-          width: "794px",
-          background: "#ffffff",
-          color: "#111827",
-          fontFamily: "Arial, sans-serif",
-          padding: "40px",
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "24px" }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: "18px" }}>{EMPRESA.nombre}</div>
-            <div style={{ fontSize: "12px", color: "#6b7280" }}>{EMPRESA.direccion}</div>
-            <div style={{ fontSize: "12px", color: "#6b7280" }}>{EMPRESA.correo}</div>
-            <div style={{ fontSize: "12px", color: "#6b7280" }}>RTN: {EMPRESA.rtn}</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontWeight: 700, fontSize: "22px", letterSpacing: "1px" }}>COTIZACIÓN</div>
-            <div style={{ fontFamily: "monospace", fontSize: "13px", color: "#6b7280" }}>{cotizacion.numero}</div>
-            {cotizacion.nombreProyecto && <div style={{ fontSize: "13px", fontWeight: 600 }}>{cotizacion.nombreProyecto}</div>}
-          </div>
-        </div>
-
-        {/* Fechas */}
-        <div style={{ display: "flex", gap: "48px", background: "#f8fafc", padding: "12px 16px", borderRadius: "6px", marginBottom: "16px", fontSize: "12px" }}>
-          <div>
-            <div style={{ fontSize: "10px", textTransform: "uppercase", color: "#6b7280", fontWeight: 600 }}>Fecha</div>
-            <div style={{ fontWeight: 600 }}>{formatFecha(cotizacion.fecha)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: "10px", textTransform: "uppercase", color: "#6b7280", fontWeight: 600 }}>Válida hasta</div>
-            <div style={{ fontWeight: 600 }}>{formatFecha(cotizacion.fechaValidez)}</div>
-          </div>
-        </div>
-
-        {/* Cliente */}
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: "6px", padding: "12px 16px", marginBottom: "16px", fontSize: "12px" }}>
-          <div style={{ fontSize: "10px", textTransform: "uppercase", color: "#6b7280", fontWeight: 600, marginBottom: "8px" }}>Para</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-            <div>
-              <div style={{ fontSize: "10px", color: "#6b7280", textTransform: "uppercase" }}>Nombre</div>
-              <div style={{ fontWeight: 700 }}>{cotizacion.cliente.nombre}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: "10px", color: "#6b7280", textTransform: "uppercase" }}>RTN</div>
-              <div style={{ fontFamily: "monospace", fontWeight: 600 }}>{cotizacion.cliente.rtn || "—"}</div>
-            </div>
-            {cotizacion.cliente.correo && <div>
-              <div style={{ fontSize: "10px", color: "#6b7280", textTransform: "uppercase" }}>Correo</div>
-              <div>{cotizacion.cliente.correo}</div>
-            </div>}
-            {cotizacion.cliente.telefono && <div>
-              <div style={{ fontSize: "10px", color: "#6b7280", textTransform: "uppercase" }}>Teléfono</div>
-              <div>{cotizacion.cliente.telefono}</div>
-            </div>}
-          </div>
-        </div>
-
-        {/* Tabla */}
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", marginBottom: "16px" }}>
-          <thead>
-            <tr style={{ background: "#f1f5f9" }}>
-              <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, fontSize: "10px", textTransform: "uppercase", color: "#374151" }}>Descripción</th>
-              <th style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600, fontSize: "10px", textTransform: "uppercase", color: "#374151", width: "60px" }}>Cant.</th>
-              <th style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, fontSize: "10px", textTransform: "uppercase", color: "#374151", width: "130px" }}>Precio Unit. (USD)</th>
-              <th style={{ padding: "8px 10px", textAlign: "right", fontWeight: 600, fontSize: "10px", textTransform: "uppercase", color: "#374151", width: "130px" }}>Subtotal (USD)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cotizacion.lineas.map((l) => (
-              <tr key={l.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                <td style={{ padding: "8px 10px", color: "#374151" }}>{l.descripcion}</td>
-                <td style={{ padding: "8px 10px", textAlign: "center", color: "#6b7280" }}>{l.cantidad}</td>
-                <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "monospace" }}>{formatDolares(l.precioUnitario)}</td>
-                <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: 600 }}>{formatDolares(l.subtotal)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Totales */}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
-          <div style={{ width: "260px", fontSize: "12px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: "1px solid #e5e7eb" }}>
-              <span style={{ color: "#6b7280" }}>Subtotal</span>
-              <span style={{ fontFamily: "monospace" }}>{formatDolares(cotizacion.subtotal)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
-              <span style={{ color: "#6b7280" }}>ISV (15%)</span>
-              <span style={{ fontFamily: "monospace" }}>{formatDolares(cotizacion.isv)}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#111827", borderRadius: "6px", marginTop: "4px" }}>
-              <span style={{ color: "#fff", fontWeight: 700 }}>Total</span>
-              <span style={{ color: "#fff", fontFamily: "monospace", fontWeight: 700 }}>{formatDolares(cotizacion.total)}</span>
-            </div>
-          </div>
-        </div>
-
-        {cotizacion.notas && (
-          <div style={{ border: "1px solid #e5e7eb", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px", fontSize: "12px" }}>
-            <div style={{ fontSize: "10px", textTransform: "uppercase", color: "#6b7280", fontWeight: 600, marginBottom: "4px" }}>Notas</div>
-            <div style={{ color: "#374151" }}>{cotizacion.notas}</div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: "12px", fontSize: "11px", color: "#9ca3af", textAlign: "center" }}>
-          <div>{EMPRESA.nombre} · RTN {EMPRESA.rtn} · {EMPRESA.correo} · Tel: {EMPRESA.telefono}</div>
-          <div style={{ marginTop: "4px", fontSize: "10px", color: "#cbd5e1" }}>
-            Sistema de Facturación desarrollado por DB Consulting © {new Date().getFullYear()}
-          </div>
-        </div>
-      </div>
 
       {/* Dialog convertir */}
       <Dialog open={confirmandoConvertir} onOpenChange={setConfirmandoConvertir}>
