@@ -90,6 +90,8 @@ src/
     │       └── cliente-detalle-client.tsx  # ★ Hitos: editor, barra progreso a11y, generar factura por hito
     └── servicios/
 scripts/
+├── setup-users.mjs              # Crea usuarios iniciales (corre en postbuild de Vercel)
+└── update-user-metadata.mjs    # Actualiza role+username en user_metadata de usuarios existentes
 migrations (en raíz del proyecto):
 ├── migration_metodo_pago.sql       ✅ ejecutada
 ├── migration_tasa_cambio.sql       ✅ ejecutada
@@ -97,7 +99,7 @@ migrations (en raíz del proyecto):
 ├── migration_condicion_pago.sql    ✅ ejecutada
 ├── migration_fase6.sql             ✅ ejecutada
 ├── migration_hitos.sql             ✅ ejecutada (2026-04-23)
-└── migration_fase10.sql            ⏳ PENDIENTE ejecutar en Supabase SQL Editor
+└── migration_fase10.sql            ✅ ejecutada (2026-04-24)
 ```
 
 ---
@@ -360,7 +362,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 ### Pendiente (acciones manuales)
 - [ ] Configurar dominio `dbconsulting.hn` en Resend (agregar 3 registros DNS) y cambiar `from` en `src/lib/actions/email.ts`
-- [ ] Después de crear nuevos usuarios por primera vez, actualizar su `user_metadata.role` en Supabase Auth si ya existían antes de esta fase (admin y asistente ya funcionan por fallback de email)
+- ✅ `user_metadata` verificado — admin y asistente ya tenían metadata correcta (`node scripts/update-user-metadata.mjs`)
 
 ---
 
