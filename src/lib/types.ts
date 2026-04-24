@@ -9,7 +9,7 @@ export interface Cliente {
   creadoEn: string;
 }
 
-export type TipoContrato = "mantenimiento" | "hosting" | "proyecto_app" | "otro";
+export type TipoContrato = "mantenimiento" | "hosting" | "soporte" | "proyecto_app" | "otro";
 
 export interface Contrato {
   id: string;

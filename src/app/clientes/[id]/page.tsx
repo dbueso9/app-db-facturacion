@@ -21,7 +21,10 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
   if (!cliente) notFound();
 
   const facturas = todasFacturas.filter((f) => f.clienteId === id);
-  const isAdmin = user?.email === "admin@dbconsulting.hn";
+  const isAdmin =
+    user?.user_metadata?.role === "admin" ||
+    user?.email === "admin@dbconsulting.hn";
+  const isGestion = user?.user_metadata?.role === "gestion";
 
   const contratoIds = contratos.map((c) => c.id);
   const hitosArr = contratoIds.length > 0
@@ -42,6 +45,7 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
       tasaCambio={tasa}
       hitosMap={hitosMap}
       isAdmin={isAdmin}
+      isGestion={isGestion}
     />
   );
 }

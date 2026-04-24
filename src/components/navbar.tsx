@@ -14,13 +14,16 @@ import {
   UserRound,
   BarChart2,
   ClipboardList,
+  RefreshCw,
+  Settings,
 } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 
-const links = [
+const baseLinks = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/facturas", label: "Facturas", icon: FileText },
   { href: "/cotizaciones", label: "Cotizaciones", icon: ClipboardList },
+  { href: "/contratos", label: "Contratos", icon: RefreshCw },
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/servicios", label: "Servicios", icon: Briefcase },
   { href: "/reportes", label: "Reportes", icon: BarChart2 },
@@ -33,7 +36,11 @@ interface NavbarProps {
 
 export function Navbar({ username, role }: NavbarProps) {
   const pathname = usePathname();
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || username === "admin";
+
+  const links = isAdmin
+    ? [...baseLinks, { href: "/admin/usuarios", label: "Admin", icon: Settings }]
+    : baseLinks;
 
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">

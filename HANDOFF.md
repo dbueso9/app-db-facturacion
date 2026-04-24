@@ -1,7 +1,7 @@
 # HANDOFF — DB Consulting Facturación
 
-## Estado actual (2026-04-23)
-App de facturación en producción — Fase 10 + correcciones UX: confirmación de cambio de estado, PDF adjunto en correos, validez cotización 15 días, datos cliente en encabezado.
+## Estado actual (2026-04-24)
+App de facturación en producción — Fase 11: Servicios Recurrentes, gestión de usuarios con roles, exportación de reportes (Excel/PDF), nueva factura con opción de proyecto, tipo soporte añadido.
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
@@ -59,18 +59,21 @@ src/
 │   │   ├── facturas.ts         # getFacturas, getFactura, saveFactura, crearNumeroFactura
 │   │   ├── cotizaciones.ts     # getCotizaciones, getCotizacion, saveCotizacion, marcarConvertidaAContrato
 │   │   ├── hitos.ts            # getHitosForContratos, saveHitos, marcarHitoFacturado
-│   │   ├── proyecto.ts         # ★ NUEVO: crearProyecto — crea contrato+hitos desde cotización
+│   │   ├── proyecto.ts         # crearProyecto — crea contrato+hitos desde cotización
 │   │   ├── servicios.ts        # getServicios, saveServicio, deleteServicio
-│   │   └── tasa-cambio.ts      # getTasaCambio() — BCH Excel, cache 1h
+│   │   ├── tasa-cambio.ts      # getTasaCambio() — BCH Excel, cache 1h
+│   │   └── usuarios.ts         # ★ NUEVO: getUsuarios, crearUsuario, actualizarRol, eliminarUsuario (Admin API)
 │   ├── contratos-utils.ts      # calcularMontoContrato, descripcionFacturaContrato (sin "use server")
 │   ├── empresa.ts              # Datos fiscales fijos (CAI, RTN, rangos, ISV)
-│   ├── types.ts                # Tipos — incluye Hito, EstadoHito (★ NUEVO)
+│   ├── types.ts                # TipoContrato incluye "soporte" ★
 │   └── utils.ts                # formatLempiras, formatDolares, formatFecha, generarId
 ├── components/
-│   └── navbar.tsx              # Sticky nav con logo, usuario activo, badge de rol, logout
+│   └── navbar.tsx              # Nav con Contratos + Admin (solo admin) ★
 └── app/
     ├── layout.tsx
-    ├── login/
+    ├── login/                  # Login dinámico — lookup por user_metadata.username ★
+    ├── contratos/              # ★ NUEVO: página Servicios Recurrentes
+    ├── admin/usuarios/         # ★ NUEVO: gestión de usuarios con roles
     ├── page.tsx / dashboard-client.tsx
     ├── reportes/
     ├── facturas/
@@ -324,21 +327,40 @@ SUPABASE_SERVICE_ROLE_KEY=...
   - Email/PDF template: nombre + correo + teléfono del cliente ahora en el bloque derecho del header (negro)
   - Vista de pantalla: correo y teléfono aparecen inmediatamente después del nombre (antes iban al final)
 
+### ✅ Fase 11 — Contratos recurrentes, usuarios con roles, exports, proyecto desde factura (2026-04-24)
+- **Nuevo tipo de contrato `soporte`:** Soporte Técnico mensual fijo — aparece en selector del formulario de contratos y en `contratos-utils.ts`
+- **Página `/contratos` — Servicios Recurrentes:**
+  - Vista global de todos los contratos activos recurrentes (mantenimiento, hosting, soporte, otro)
+  - KPIs: contratos activos, total mensual, pendientes de facturar este mes
+  - Detecta automáticamente si ya se facturó el mes actual por `clienteId + nombreProyecto`
+  - Filtro por tipo + búsqueda por cliente/servicio
+  - Botón "Facturar" rápido por contrato (genera factura emitida y redirige a detalle)
+  - Rol `gestion` no ve botón Facturar
+  - Link directo al perfil del cliente para gestión completa
+- **Gestión de usuarios — `/admin/usuarios` (solo admin):**
+  - Lista todos los usuarios del sistema (por email `@dbconsulting.hn`)
+  - Roles: `admin` (acceso total), `asistente` (sin eliminar/precios), `gestion` (solo lectura)
+  - Crear usuario → email = `username@dbconsulting.hn`, password, rol
+  - Editar rol y contraseña de cualquier usuario
+  - Eliminar usuario (no se puede eliminar a uno mismo)
+  - Acciones via Supabase Auth Admin API (`SUPABASE_SERVICE_ROLE_KEY`)
+  - Navbar muestra "Admin" solo si `role === admin`
+- **Login dinámico:** `actions.ts` hace lookup de usuarios por `user_metadata.username` en lugar de mapa hardcodeado; fallback por email pattern `username@dbconsulting.hn`
+- **Rol `gestion` en cliente-detalle:** oculta botones "Agregar Servicio", editar/eliminar contratos, generar facturas e hitos
+- **Nueva factura → Proyecto con hitos:**
+  - Sección plegable "Gestionar como proyecto con hitos" en el formulario
+  - Si activo: define hitos con % y nombres; valida suma=100%
+  - Al emitir: crea factura + contrato `proyecto_app` + hitos; el hito de mayor % queda vinculado a la factura como "facturado"
+  - Redirige al perfil del cliente para continuar con los demás hitos
+- **Reportes — Exportar Excel y PDF:**
+  - Botones "Excel" y "PDF" en el header de `/reportes`
+  - Excel (`xlsx`): 3 hojas — Resumen Mensual, Por Cliente, Facturas del año
+  - PDF (`jsPDF`): portada negra, resumen anual, tabla mensual, tabla por cliente, footer con fecha
+  - Ambos con nombre de archivo `Reporte_DBConsulting_{año}.{ext}`
+
 ### Pendiente (acciones manuales)
-- [ ] **Ejecutar `migration_fase10.sql`** en Supabase SQL Editor (`omiodzulmcytponkhras`)
 - [ ] Configurar dominio `dbconsulting.hn` en Resend (agregar 3 registros DNS) y cambiar `from` en `src/lib/actions/email.ts`
-- [ ] Limpiar tablas `dbc_*` del proyecto Supabase antiguo `bekolkmrxxbygbqauotb` (ver sección al final)
-
----
-
-## Pendiente original
-- [ ] **Limpiar tablas `dbc_*` de mugdpos** — ejecutar en SQL Editor de `bekolkmrxxbygbqauotb`:
-  ```sql
-  DROP TABLE IF EXISTS dbc_lineas_factura;
-  DROP TABLE IF EXISTS dbc_facturas;
-  DROP TABLE IF EXISTS dbc_clientes;
-  DROP TABLE IF EXISTS dbc_servicios;
-  ```
+- [ ] Después de crear nuevos usuarios por primera vez, actualizar su `user_metadata.role` en Supabase Auth si ya existían antes de esta fase (admin y asistente ya funcionan por fallback de email)
 
 ---
 
@@ -406,10 +428,19 @@ git push  # Vercel despliega automáticamente a producción desde main
 | Fase 10: ProgresoHitos cobrado/emitido/pendiente | 2026-04-23 | ✅ |
 | Fase 10: Badge estado proyecto (Cerrado/En progreso/etc.) | 2026-04-23 | ✅ |
 | Fase 10: Cotización → Crear Contrato con Hitos | 2026-04-23 | ✅ |
-| Fase 10: migration_fase10.sql (pendiente ejecutar) | 2026-04-23 | ⏳ |
+| Fase 10: migration_fase10.sql ejecutada | 2026-04-23 | ✅ |
 | Build TypeScript Fase 10 — 0 errores | 2026-04-23 | ✅ |
 | Confirmación de cambio de estado factura (todos los estados) | 2026-04-23 | ✅ |
 | PDF adjunto en correos (factura individual, cotización, masivo) | 2026-04-23 | ✅ |
 | Validez cotización 15 días + leyenda VÁLIDA HASTA prominente | 2026-04-23 | ✅ |
 | Datos cliente (correo) en encabezado cotización (pantalla + email) | 2026-04-23 | ✅ |
 | Build TypeScript correcciones UX — 0 errores | 2026-04-23 | ✅ |
+| Fase 11: Tipo soporte en TipoContrato + contratos-utils | 2026-04-24 | ✅ |
+| Fase 11: Página /contratos Servicios Recurrentes | 2026-04-24 | ✅ |
+| Fase 11: Gestión usuarios /admin/usuarios (Admin API) | 2026-04-24 | ✅ |
+| Fase 11: Login dinámico por user_metadata.username | 2026-04-24 | ✅ |
+| Fase 11: Nueva factura → proyecto con hitos | 2026-04-24 | ✅ |
+| Fase 11: Reportes exportar Excel + PDF | 2026-04-24 | ✅ |
+| Fase 11: Navbar Contratos + Admin links | 2026-04-24 | ✅ |
+| Fase 11: Rol gestion oculta botones de acción | 2026-04-24 | ✅ |
+| Build TypeScript Fase 11 — 0 errores | 2026-04-24 | ✅ |

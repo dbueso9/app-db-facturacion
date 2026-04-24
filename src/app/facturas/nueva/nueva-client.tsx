@@ -14,11 +14,13 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { crearNumeroFactura, saveFactura } from "@/lib/actions/facturas";
-import { Cliente, Servicio, Factura, MetodoPago } from "@/lib/types";
+import { saveContrato } from "@/lib/actions/contratos";
+import { saveHitos } from "@/lib/actions/hitos";
+import { Cliente, Servicio, Factura, MetodoPago, Contrato, Hito, EstadoHito } from "@/lib/types";
 import { TasaCambio } from "@/lib/actions/tasa-cambio";
 import { formatLempiras, generarId } from "@/lib/utils";
 import { EMPRESA } from "@/lib/empresa";
-import { Plus, Trash2, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, AlertTriangle, FolderOpen, ChevronDown, ChevronUp } from "lucide-react";
 
 const lineaSchema = z.object({
   descripcion: z.string().min(1, "Descripción requerida"),
@@ -46,6 +48,8 @@ type FormValues = {
   lineas: { descripcion: string; cantidad: number; precioUnitario: number }[];
 };
 
+type FormHito = { id: string; nombre: string; porcentaje: string };
+
 interface NuevaFacturaClientProps {
   clientes: Cliente[];
   servicios: Servicio[];
@@ -63,6 +67,14 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [catalogoKey, setCatalogoKey] = useState(0);
   const [guardando, setGuardando] = useState(false);
+
+  // Proyecto / contrato
+  const [esProyecto, setEsProyecto] = useState(false);
+  const [formHitos, setFormHitos] = useState<FormHito[]>([
+    { id: generarId(), nombre: "Anticipo", porcentaje: "50" },
+    { id: generarId(), nombre: "Entrega Final", porcentaje: "50" },
+  ]);
+  const [errorHitos, setErrorHitos] = useState<string | null>(null);
 
   const hoy = new Date().toISOString().split("T")[0];
 
@@ -84,7 +96,6 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
   const fechaValue = watch("fecha");
   const condicionPagoValue = watch("condicionPago");
 
-  // Calcular fecha de vencimiento según condición de pago
   const fechaVencimientoCalc = (() => {
     if (!fechaValue || !condicionPagoValue) return "";
     const dias = parseInt(condicionPagoValue);
@@ -95,6 +106,8 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
   const subtotal = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * (Number(l.precioUnitario) || 0), 0);
   const isv = subtotal * EMPRESA.isv;
   const total = subtotal + isv;
+
+  const sumaHitos = formHitos.reduce((s, h) => s + (parseFloat(h.porcentaje) || 0), 0);
 
   function onClienteChange(id: string | null) {
     const c = clientes.find((c) => c.id === id);
@@ -120,8 +133,32 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
     }
   }
 
+  function addHitoRow() {
+    setFormHitos((prev) => [...prev, { id: generarId(), nombre: "", porcentaje: "" }]);
+  }
+
+  function removeHitoRow(idx: number) {
+    setFormHitos((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateHitoRow(idx: number, field: "nombre" | "porcentaje", value: string) {
+    setFormHitos((prev) => prev.map((h, i) => i === idx ? { ...h, [field]: value } : h));
+  }
+
   async function onSubmit(data: FormValues) {
     if (!clienteSeleccionado) return;
+
+    if (esProyecto) {
+      if (Math.abs(sumaHitos - 100) > 0.01) {
+        setErrorHitos(`Los porcentajes deben sumar 100% (actualmente ${sumaHitos.toFixed(1)}%)`);
+        return;
+      }
+      if (formHitos.some((h) => !h.nombre.trim())) {
+        setErrorHitos("Todos los hitos deben tener nombre");
+        return;
+      }
+    }
+
     setGuardando(true);
     try {
       const { secuencia, numero } = await crearNumeroFactura();
@@ -140,8 +177,9 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
       const sub = lineasCalc.reduce((s, l) => s + l.subtotal, 0);
       const isvCalc = sub * EMPRESA.isv;
 
+      const facturaId = generarId();
       const factura: Factura = {
-        id: generarId(),
+        id: facturaId,
         numero,
         secuencia,
         fecha: data.fecha,
@@ -162,7 +200,50 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
       };
 
       await saveFactura(factura);
-      router.push(`/facturas/${factura.id}`);
+
+      if (esProyecto) {
+        const contratoId = generarId();
+        const contrato: Contrato = {
+          id: contratoId,
+          clienteId: clienteSeleccionado.id,
+          nombreProyecto: data.nombreProyecto,
+          tipo: "proyecto_app",
+          valorBase: sub,
+          fechaInicio: data.fecha,
+          diaFacturacion: 1,
+          activo: true,
+          notas: "",
+          creadoEn: new Date().toISOString(),
+        };
+        await saveContrato(contrato);
+
+        // Crear hitos — el primero (porcentaje mayor) ligado a esta factura
+        const primerHitoIdx = formHitos.reduce(
+          (maxIdx, h, idx) =>
+            (parseFloat(h.porcentaje) || 0) > (parseFloat(formHitos[maxIdx].porcentaje) || 0) ? idx : maxIdx,
+          0
+        );
+
+        const hitos: Omit<Hito, "creadoEn">[] = formHitos.map((h, idx) => {
+          const pct = parseFloat(h.porcentaje);
+          const monto = Number(((sub * pct) / 100).toFixed(2));
+          return {
+            id: idx === primerHitoIdx ? generarId() : generarId(),
+            contratoId,
+            nombre: h.nombre.trim(),
+            porcentaje: pct,
+            monto,
+            estado: (idx === primerHitoIdx ? "facturado" : "pendiente") as EstadoHito,
+            facturaId: idx === primerHitoIdx ? facturaId : undefined,
+            orden: idx,
+          };
+        });
+
+        await saveHitos(contratoId, hitos);
+        router.push(`/clientes/${clienteSeleccionado.id}`);
+      } else {
+        router.push(`/facturas/${factura.id}`);
+      }
     } finally {
       setGuardando(false);
     }
@@ -183,7 +264,6 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* datalists para autocompletado de servicios */}
       {servicios.map((_, idx) => (
         <datalist key={idx} id={`srv-list-${idx}`}>
           {servicios.map((s) => <option key={s.id} value={s.nombre} />)}
@@ -217,7 +297,6 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Campo oculto para clienteId */}
         <input type="hidden" {...register("clienteId")} />
 
         <Card>
@@ -466,6 +545,102 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
           </CardContent>
         </Card>
 
+        {/* Sección Proyecto con Hitos */}
+        <Card className={esProyecto ? "border-purple-500/40" : ""}>
+          <CardHeader
+            className="pb-3 cursor-pointer select-none"
+            onClick={() => { setEsProyecto((v) => !v); setErrorHitos(null); }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${esProyecto ? "bg-purple-600 border-purple-600" : "border-muted-foreground"}`}>
+                  {esProyecto && <span className="text-white text-xs font-bold">✓</span>}
+                </div>
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4 text-purple-400" />
+                    Gestionar como proyecto con hitos
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Crea un contrato y plan de pagos vinculado a esta factura
+                  </p>
+                </div>
+              </div>
+              {esProyecto ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </div>
+          </CardHeader>
+
+          {esProyecto && (
+            <CardContent className="space-y-4 pt-0">
+              <div className="bg-purple-50/10 border border-purple-500/20 rounded-lg p-3 text-xs text-purple-300">
+                Se creará un contrato de proyecto para este cliente. El primer hito con mayor porcentaje quedará vinculado a esta factura. Los demás hitos podrás facturarlos desde el perfil del cliente.
+              </div>
+
+              <div>
+                <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1 mb-2">
+                  <span className="col-span-6">Nombre del Hito</span>
+                  <span className="col-span-3 text-center">%</span>
+                  <span className="col-span-2 text-right">Monto (sin ISV)</span>
+                  <span className="col-span-1"></span>
+                </div>
+
+                {formHitos.map((h, idx) => {
+                  const pct = parseFloat(h.porcentaje) || 0;
+                  const monto = (subtotal * pct) / 100;
+                  return (
+                    <div key={h.id} className="grid grid-cols-12 gap-2 items-center mb-2">
+                      <div className="col-span-6">
+                        <Input
+                          value={h.nombre}
+                          onChange={(e) => updateHitoRow(idx, "nombre", e.target.value)}
+                          placeholder="Ej: Anticipo, Entrega..."
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={h.porcentaje}
+                          onChange={(e) => updateHitoRow(idx, "porcentaje", e.target.value)}
+                          className="h-8 text-sm text-center"
+                        />
+                      </div>
+                      <div className="col-span-2 text-right text-xs font-mono text-muted-foreground">
+                        {formatLempiras(monto)}
+                      </div>
+                      <div className="col-span-1 flex justify-center">
+                        {formHitos.length > 1 && (
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeHitoRow(idx)}>
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <Button type="button" variant="outline" size="sm" onClick={addHitoRow} className="w-full mt-1">
+                  <Plus className="h-4 w-4 mr-1" /> Agregar hito
+                </Button>
+
+                <div className={`flex items-center justify-between text-sm px-2 py-1.5 rounded mt-2 ${Math.abs(sumaHitos - 100) < 0.01 ? "bg-green-50/10 text-green-500" : "bg-red-950/30 text-red-400"}`}>
+                  <span>Suma de porcentajes</span>
+                  <span className="font-mono font-bold">{sumaHitos.toFixed(1)}% / 100%</span>
+                </div>
+
+                {errorHitos && (
+                  <p className="text-sm text-red-400 mt-2 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" /> {errorHitos}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Notas adicionales</CardTitle>
@@ -483,8 +658,8 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
           <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={guardando}>
-            {guardando ? "Emitiendo..." : "Emitir Factura"}
+          <Button type="submit" disabled={guardando || (esProyecto && Math.abs(sumaHitos - 100) > 0.01)}>
+            {guardando ? "Emitiendo..." : esProyecto ? "Emitir y Crear Proyecto" : "Emitir Factura"}
           </Button>
         </div>
       </form>

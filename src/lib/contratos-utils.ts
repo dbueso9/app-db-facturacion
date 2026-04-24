@@ -26,6 +26,8 @@ export function descripcionFacturaContrato(contrato: Contrato, año: number, mes
       return `Mantenimiento y Soporte — ${contrato.nombreProyecto} ${año}`;
     case "hosting":
       return `Hosting — ${contrato.nombreProyecto} ${mesNombre} ${año}`;
+    case "soporte":
+      return `Soporte Técnico — ${contrato.nombreProyecto} ${mesNombre} ${año}`;
     case "proyecto_app":
       return `Servicio App — ${contrato.nombreProyecto} ${mesNombre} ${año}`;
     default:

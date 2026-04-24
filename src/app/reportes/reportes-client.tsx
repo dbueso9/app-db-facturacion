@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Factura, Cliente } from "@/lib/types";
 import { formatLempiras, formatFecha, MESES_CORTO, MESES_LARGO } from "@/lib/utils";
-import { ArrowLeft, TrendingUp, CheckCircle, Clock, FileText } from "lucide-react";
+import { ArrowLeft, TrendingUp, CheckCircle, Clock, FileText, FileSpreadsheet, FileDown } from "lucide-react";
 
 const MESES_NOMBRES = MESES_LARGO;
 
@@ -40,10 +40,10 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
   }, [facturas]);
 
   const [año, setAño] = useState<number>(años[0]);
+  const [exportando, setExportando] = useState<"excel" | "pdf" | null>(null);
 
   const activas = facturas.filter((f) => f.estado !== "anulada");
 
-  // Datos mensuales para el año seleccionado
   const dataMensual = useMemo(() => MESES_CORTO.map((mes, i) => {
     const del = activas.filter((f) => {
       const d = new Date(f.fecha + "T00:00:00");
@@ -64,7 +64,6 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
   const cobradoAño = dataMensual.reduce((s, m) => s + m.cobrado, 0);
   const pendienteAño = dataMensual.reduce((s, m) => s + m.pendiente, 0);
 
-  // Reporte por cliente para el año
   const reporteClientes = useMemo(() => {
     const mapa: Record<string, { cliente: Cliente; total: number; cobrado: number; pendiente: number; count: number }> = {};
     activas
@@ -82,7 +81,6 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
     return Object.values(mapa).sort((a, b) => b.total - a.total);
   }, [activas, clientes, año]);
 
-  // Facturas del mes clickeado
   const [mesFiltro, setMesFiltro] = useState<number | null>(null);
 
   const facturasMes = useMemo(() => {
@@ -95,6 +93,173 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
       .sort((a, b) => b.fecha.localeCompare(a.fecha));
   }, [activas, año, mesFiltro]);
 
+  const facturasDelAño = useMemo(
+    () => activas
+      .filter((f) => new Date(f.fecha + "T00:00:00").getFullYear() === año)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    [activas, año]
+  );
+
+  async function exportarExcel() {
+    setExportando("excel");
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.utils.book_new();
+
+      // Hoja 1: Resumen mensual
+      const ws1Data = [
+        ["Mes", "Facturas", "Facturado (L.)", "Cobrado (L.)", "Por Cobrar (L.)"],
+        ...dataMensual.filter((m) => m.count > 0).map((m) => [
+          m.mesNombre, m.count, m.facturado, m.cobrado, m.pendiente,
+        ]),
+        [],
+        ["TOTALES", dataMensual.reduce((s, m) => s + m.count, 0), totalAño, cobradoAño, pendienteAño],
+      ];
+      const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+      XLSX.utils.book_append_sheet(wb, ws1, "Resumen Mensual");
+
+      // Hoja 2: Por cliente
+      const ws2Data = [
+        ["Cliente", "Código", "Facturas", "Facturado (L.)", "Cobrado (L.)", "Por Cobrar (L.)", "% Cobrado"],
+        ...reporteClientes.map((r) => [
+          r.cliente.nombre,
+          r.cliente.codigo || "",
+          r.count,
+          r.total,
+          r.cobrado,
+          r.pendiente,
+          r.total > 0 ? `${Math.round((r.cobrado / r.total) * 100)}%` : "0%",
+        ]),
+      ];
+      const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+      XLSX.utils.book_append_sheet(wb, ws2, "Por Cliente");
+
+      // Hoja 3: Todas las facturas del año
+      const ws3Data = [
+        ["Número", "Fecha", "Vencimiento", "Cliente", "RTN Cliente", "Proyecto", "Estado", "Método Pago", "Subtotal (L.)", "ISV (L.)", "Total (L.)"],
+        ...facturasDelAño.map((f) => [
+          f.numero,
+          f.fecha,
+          f.fechaVencimiento || "",
+          f.cliente.nombre,
+          f.cliente.rtn || "",
+          f.nombreProyecto || "",
+          f.estado,
+          f.metodoPago || "",
+          f.subtotal,
+          f.isv,
+          f.total,
+        ]),
+      ];
+      const ws3 = XLSX.utils.aoa_to_sheet(ws3Data);
+      XLSX.utils.book_append_sheet(wb, ws3, "Facturas");
+
+      XLSX.writeFile(wb, `Reporte_DBConsulting_${año}.xlsx`);
+    } finally {
+      setExportando(null);
+    }
+  }
+
+  async function exportarPDF() {
+    setExportando("pdf");
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+      const pageW = doc.internal.pageSize.getWidth();
+      let y = 15;
+
+      const addLine = (text: string, x: number, size = 10, bold = false) => {
+        doc.setFontSize(size);
+        doc.setFont("helvetica", bold ? "bold" : "normal");
+        doc.text(text, x, y);
+      };
+
+      const newLine = (extra = 6) => { y += extra; };
+
+      // Header
+      doc.setFillColor(17, 24, 39);
+      doc.rect(0, 0, pageW, 22, "F");
+      doc.setTextColor(255, 255, 255);
+      addLine("DB CONSULTING — REPORTE DE FACTURACIÓN", 14, 13, true);
+      newLine(7);
+      addLine(`Año ${año}`, 14, 10);
+      y = 28;
+      doc.setTextColor(17, 24, 39);
+
+      newLine(4);
+
+      // Resumen
+      addLine("RESUMEN DEL AÑO", 14, 11, true);
+      newLine(6);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Total Facturado: L. ${totalAño.toLocaleString("es-HN", { minimumFractionDigits: 2 })}`, 14, y);
+      doc.text(`Total Cobrado: L. ${cobradoAño.toLocaleString("es-HN", { minimumFractionDigits: 2 })}`, 80, y);
+      doc.text(`Por Cobrar: L. ${pendienteAño.toLocaleString("es-HN", { minimumFractionDigits: 2 })}`, 150, y);
+      newLine(10);
+
+      // Tabla mensual
+      addLine("DETALLE MENSUAL", 14, 11, true);
+      newLine(6);
+      const colsM = [14, 55, 85, 125, 160];
+      doc.setFillColor(243, 244, 246);
+      doc.rect(12, y - 4, pageW - 24, 7, "F");
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      ["Mes", "Facturas", "Facturado", "Cobrado", "Por Cobrar"].forEach((h, i) => doc.text(h, colsM[i], y));
+      newLine(7);
+      doc.setFont("helvetica", "normal");
+      dataMensual.filter((m) => m.count > 0).forEach((m) => {
+        if (y > 260) { doc.addPage(); y = 15; }
+        doc.text(m.mesNombre, colsM[0], y);
+        doc.text(String(m.count), colsM[1], y);
+        doc.text(`L. ${m.facturado.toLocaleString("es-HN", { minimumFractionDigits: 2 })}`, colsM[2], y);
+        doc.text(`L. ${m.cobrado.toLocaleString("es-HN", { minimumFractionDigits: 2 })}`, colsM[3], y);
+        doc.text(m.pendiente > 0 ? `L. ${m.pendiente.toLocaleString("es-HN", { minimumFractionDigits: 2 })}` : "—", colsM[4], y);
+        newLine(6);
+      });
+
+      newLine(4);
+      if (y > 220) { doc.addPage(); y = 15; }
+
+      // Tabla clientes
+      addLine("POR CLIENTE", 14, 11, true);
+      newLine(6);
+      const colsC = [14, 70, 90, 125, 160];
+      doc.setFillColor(243, 244, 246);
+      doc.rect(12, y - 4, pageW - 24, 7, "F");
+      doc.setFont("helvetica", "bold");
+      ["Cliente", "Facturas", "Facturado", "Cobrado", "Por Cobrar"].forEach((h, i) => doc.text(h, colsC[i], y));
+      newLine(7);
+      doc.setFont("helvetica", "normal");
+      reporteClientes.forEach((r) => {
+        if (y > 270) { doc.addPage(); y = 15; }
+        doc.text(r.cliente.nombre.slice(0, 30), colsC[0], y);
+        doc.text(String(r.count), colsC[1], y);
+        doc.text(`L. ${r.total.toLocaleString("es-HN", { minimumFractionDigits: 2 })}`, colsC[2], y);
+        doc.text(`L. ${r.cobrado.toLocaleString("es-HN", { minimumFractionDigits: 2 })}`, colsC[3], y);
+        doc.text(r.pendiente > 0 ? `L. ${r.pendiente.toLocaleString("es-HN", { minimumFractionDigits: 2 })}` : "—", colsC[4], y);
+        newLine(6);
+      });
+
+      // Footer
+      doc.setPage(doc.getNumberOfPages());
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(
+        `DB Consulting — Generado el ${new Date().toLocaleDateString("es-HN")}`,
+        pageW / 2,
+        doc.internal.pageSize.getHeight() - 8,
+        { align: "center" }
+      );
+
+      doc.save(`Reporte_DBConsulting_${año}.pdf`);
+    } finally {
+      setExportando(null);
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
@@ -106,16 +271,38 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
           <h1 className="text-2xl font-bold">Reportes</h1>
           <p className="text-muted-foreground text-sm">Ingresos por período y cliente</p>
         </div>
-        <Select value={String(año)} onValueChange={(v) => { setAño(Number(v)); setMesFiltro(null); }}>
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {años.map((a) => (
-              <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportarExcel}
+            disabled={exportando !== null}
+            title="Exportar a Excel"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-1.5 text-green-500" />
+            {exportando === "excel" ? "Generando..." : "Excel"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportarPDF}
+            disabled={exportando !== null}
+            title="Exportar a PDF"
+          >
+            <FileDown className="h-4 w-4 mr-1.5 text-red-400" />
+            {exportando === "pdf" ? "Generando..." : "PDF"}
+          </Button>
+          <Select value={String(año)} onValueChange={(v) => { setAño(Number(v)); setMesFiltro(null); }}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {años.map((a) => (
+                <SelectItem key={a} value={String(a)}>{a}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Resumen del año */}
@@ -157,7 +344,7 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
         </Card>
       </div>
 
-      {/* Gráfica mensual — clic para ver facturas del mes */}
+      {/* Gráfica mensual */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">

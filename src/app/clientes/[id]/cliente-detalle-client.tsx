@@ -26,6 +26,7 @@ import { ArrowLeft, Plus, Pencil, Trash2, FileText, Zap, Power, Send, CheckCircl
 const TIPO_LABELS: Record<TipoContrato, string> = {
   mantenimiento: "Mantenimiento / Soporte",
   hosting: "Hosting",
+  soporte: "Soporte Técnico",
   proyecto_app: "Proyecto / App",
   otro: "Otro",
 };
@@ -33,6 +34,7 @@ const TIPO_LABELS: Record<TipoContrato, string> = {
 const TIPO_BADGE: Record<TipoContrato, string> = {
   mantenimiento: "bg-orange-100 text-orange-800",
   hosting: "bg-blue-100 text-blue-800",
+  soporte: "bg-green-100 text-green-800",
   proyecto_app: "bg-purple-100 text-purple-800",
   otro: "bg-gray-100 text-gray-800",
 };
@@ -56,6 +58,7 @@ interface Props {
   tasaCambio: TasaCambio | null;
   hitosMap: Record<string, Hito[]>;
   isAdmin: boolean;
+  isGestion: boolean;
 }
 
 function ProgresoHitos({ hitos, valorBase, facturas }: { hitos: Hito[]; valorBase: number; facturas: Factura[] }) {
@@ -132,7 +135,7 @@ function ProgresoHitos({ hitos, valorBase, facturas }: { hitos: Hito[]; valorBas
 }
 
 export default function ClienteDetalleClient({
-  cliente, contratos: init, facturas, tasaCambio, hitosMap: initHitosMap, isAdmin,
+  cliente, contratos: init, facturas, tasaCambio, hitosMap: initHitosMap, isAdmin, isGestion,
 }: Props) {
   const router = useRouter();
   const [contratos, setContratos] = useState<Contrato[]>(init);
@@ -445,10 +448,12 @@ export default function ClienteDetalleClient({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-base">Servicios Contratados</CardTitle>
-          <Button size="sm" onClick={() => abrirContrato()}>
-            <Plus className="h-4 w-4 mr-1" />
-            Agregar Servicio
-          </Button>
+          {!isGestion && (
+            <Button size="sm" onClick={() => abrirContrato()}>
+              <Plus className="h-4 w-4 mr-1" />
+              Agregar Servicio
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {contratos.length === 0 ? (
@@ -531,16 +536,18 @@ export default function ClienteDetalleClient({
                                             </Badge>
                                           )
                                         ) : (
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-7 text-xs"
-                                            onClick={() => generarFacturaHito(c, h)}
-                                            disabled={!c.activo || generando === h.id}
-                                          >
-                                            <Zap className="h-3 w-3 mr-1" />
-                                            {generando === h.id ? "Generando..." : "Generar Factura"}
-                                          </Button>
+                                          !isGestion ? (
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="h-7 text-xs"
+                                              onClick={() => generarFacturaHito(c, h)}
+                                              disabled={!c.activo || generando === h.id}
+                                            >
+                                              <Zap className="h-3 w-3 mr-1" />
+                                              {generando === h.id ? "Generando..." : "Generar Factura"}
+                                            </Button>
+                                          ) : null
                                         )}
                                       </div>
                                     </div>
@@ -568,7 +575,7 @@ export default function ClienteDetalleClient({
                       </div>
 
                       <div className="flex gap-1 shrink-0">
-                        {c.tipo !== "proyecto_app" || !tieneHitos ? (
+                        {!isGestion && (c.tipo !== "proyecto_app" || !tieneHitos) && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -579,16 +586,20 @@ export default function ClienteDetalleClient({
                             <Zap className="h-3 w-3 mr-1" />
                             {generando === c.id ? "Generando..." : "Facturar"}
                           </Button>
-                        ) : null}
-                        <Button variant="ghost" size="icon" onClick={() => toggleActivo(c)} title={c.activo ? "Desactivar" : "Activar"}>
-                          <Power className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => abrirContrato(c)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => eliminarContrato(c.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        )}
+                        {!isGestion && (
+                          <>
+                            <Button variant="ghost" size="icon" onClick={() => toggleActivo(c)} title={c.activo ? "Desactivar" : "Activar"}>
+                              <Power className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => abrirContrato(c)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => eliminarContrato(c.id)}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -676,7 +687,8 @@ export default function ClienteDetalleClient({
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="mantenimiento">Mantenimiento / Soporte (17% anual)</SelectItem>
-                    <SelectItem value="hosting">Hosting (mensual)</SelectItem>
+                    <SelectItem value="hosting">Hosting (mensual fijo)</SelectItem>
+                    <SelectItem value="soporte">Soporte Técnico (mensual fijo)</SelectItem>
                     <SelectItem value="proyecto_app">Proyecto / App (hitos)</SelectItem>
                     <SelectItem value="otro">Otro</SelectItem>
                   </SelectContent>
