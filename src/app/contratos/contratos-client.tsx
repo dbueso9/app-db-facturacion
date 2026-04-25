@@ -138,6 +138,7 @@ export default function ContratosClient({
         cliente,
         lineas: [{ id: generarId(), descripcion, cantidad: 1, precioUnitario: monto, subtotal: monto }],
         subtotal: monto,
+        descuento: 0,
         isv: isvCalc,
         total: monto + isvCalc,
         estado: "emitida",

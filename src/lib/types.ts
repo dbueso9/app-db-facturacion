@@ -47,6 +47,7 @@ export interface Factura {
   cliente: Cliente;
   lineas: LineaFactura[];
   subtotal: number;
+  descuento: number;
   isv: number;
   total: number;
   estado: EstadoFactura;
@@ -92,6 +93,7 @@ export interface Cotizacion {
   cliente: Cliente;
   lineas: LineaCotizacion[];
   subtotal: number;
+  descuento: number;
   isv: number;
   total: number;
   estado: EstadoCotizacion;

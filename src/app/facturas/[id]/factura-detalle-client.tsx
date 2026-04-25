@@ -289,9 +289,6 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
           <div className="text-right">
             <h2 className="text-2xl font-bold text-gray-900">FACTURA</h2>
             <p className="text-sm font-mono text-gray-600 mt-1">{factura.numero}</p>
-            {factura.nombreProyecto && (
-              <p className="text-sm font-semibold text-gray-700 mt-1">{factura.nombreProyecto}</p>
-            )}
             <div className="print:hidden mt-2">
               <Badge variant={estado.variant}>{estado.label}</Badge>
             </div>
@@ -421,7 +418,7 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
             </div>
             <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
               <span className="text-gray-600">Descuento</span>
-              <span className="font-mono">{formatLempiras(0)}</span>
+              <span className="font-mono">{formatLempiras(factura.descuento ?? 0)}</span>
             </div>
             <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
               <span className="text-gray-600">Impt. Exento</span>
@@ -429,7 +426,7 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
             </div>
             <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
               <span className="text-gray-600">Impt. Gravado</span>
-              <span className="font-mono">{formatLempiras(factura.subtotal)}</span>
+              <span className="font-mono">{formatLempiras(factura.subtotal - (factura.descuento ?? 0))}</span>
             </div>
             <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
               <span className="text-gray-600">Impt. Exonerado</span>

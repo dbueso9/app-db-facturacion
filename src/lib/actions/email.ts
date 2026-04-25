@@ -27,7 +27,8 @@ export async function enviarFactura(
   pdfBase64?: string
 ): Promise<EnvioResult> {
   try {
-    const html = generarHtmlFactura(factura);
+    const logoUrl = `${process.env.NEXT_PUBLIC_APP_URL}/Logo%20DB.png`;
+    const html = generarHtmlFactura(factura, logoUrl);
     const cuerpo = mensaje.trim()
       ? `<p style="font-family:Arial,sans-serif;color:#374151;margin-bottom:24px">${mensaje.replace(/\n/g, "<br>")}</p>${html}`
       : html;
@@ -57,7 +58,8 @@ export async function enviarCotizacion(
   pdfBase64?: string
 ): Promise<EnvioResult> {
   try {
-    const html = generarHtmlCotizacion(cotizacion);
+    const logoUrl = `${process.env.NEXT_PUBLIC_APP_URL}/Logo%20DB.png`;
+    const html = generarHtmlCotizacion(cotizacion, logoUrl);
     const cuerpo = mensaje.trim()
       ? `<p style="font-family:Arial,sans-serif;color:#374151;margin-bottom:24px">${mensaje.replace(/\n/g, "<br>")}</p>${html}`
       : html;
@@ -93,7 +95,7 @@ export async function enviarFacturasAgrupadas(
       .map(
         (f) => `
         <div style="margin-bottom:48px">
-          ${generarHtmlFactura(f)}
+          ${generarHtmlFactura(f, `${process.env.NEXT_PUBLIC_APP_URL}/Logo%20DB.png`)}
         </div>`
       )
       .join('<hr style="border:none;border-top:2px dashed #e5e7eb;margin:32px 0">');

@@ -15,7 +15,11 @@ function fechaDestacada(s: string): string {
   return `${d.getDate()} DE ${mes} DE ${d.getFullYear()}`;
 }
 
-export function generarHtmlCotizacion(cotizacion: Cotizacion): string {
+export function generarHtmlCotizacion(cotizacion: Cotizacion, logoUrl?: string): string {
+  const descuento = cotizacion.descuento ?? 0;
+  const gravado = cotizacion.subtotal - descuento;
+  const isv = cotizacion.isv;
+
   const lineas = cotizacion.lineas
     .map(
       (l) => `
@@ -30,39 +34,46 @@ export function generarHtmlCotizacion(cotizacion: Cotizacion): string {
 
   const ultimaFila = `
       <tr>
-        <td colspan="4" style="padding:7px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:11px;font-style:italic;letter-spacing:.5px">— Ultima Fila —</td>
+        <td colspan="4" style="padding:7px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:11px;font-style:italic;letter-spacing:.5px">— Última Fila —</td>
       </tr>`;
+
+  const proyectoFila = cotizacion.nombreProyecto ? `
+      <tr>
+        <td colspan="4" style="padding:6px 12px;background:#f0f4f8;font-size:12px;font-weight:700;color:#1e3a5f;letter-spacing:.3px">${cotizacion.nombreProyecto}</td>
+      </tr>` : "";
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cotización ${cotizacion.numero}</title></head>
-<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif;color:#111827">
-  <div style="max-width:700px;margin:28px auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif;color:#111827;min-height:1122px">
+  <div style="max-width:794px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;overflow:hidden;min-height:1122px">
 
-    <!-- Header limpio -->
-    <div style="padding:28px 40px;border-bottom:3px solid #1e3a5f;display:flex;justify-content:space-between;align-items:flex-start">
-      <div>
-        <p style="margin:0;font-size:22px;font-weight:800;color:#1e3a5f;letter-spacing:.5px">${EMPRESA.nombre}</p>
-        <p style="margin:4px 0 0;font-size:12px;color:#6b7280">${EMPRESA.direccion}</p>
-        <p style="margin:2px 0 0;font-size:12px;color:#6b7280">Tel: ${EMPRESA.telefono} &nbsp;|&nbsp; ${EMPRESA.correo}</p>
-        <p style="margin:2px 0 0;font-size:12px;color:#6b7280">RTN: <strong style="color:#374151">${EMPRESA.rtn}</strong></p>
+    <!-- Encabezado -->
+    <div style="padding:24px 40px;border-bottom:3px solid #1e3a5f;display:flex;justify-content:space-between;align-items:flex-start">
+      <div style="display:flex;align-items:flex-start;gap:14px">
+        ${logoUrl ? `<img src="${logoUrl}" alt="Logo" style="width:56px;height:56px;object-fit:contain;border-radius:6px;flex-shrink:0">` : ""}
+        <div>
+          <p style="margin:0;font-size:21px;font-weight:800;color:#1e3a5f;letter-spacing:.5px">${EMPRESA.nombre}</p>
+          <p style="margin:4px 0 0;font-size:12px;color:#6b7280">${EMPRESA.direccion}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#6b7280">Tel: ${EMPRESA.telefono} &nbsp;|&nbsp; ${EMPRESA.correo}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#6b7280">RTN: <strong style="color:#374151">${EMPRESA.rtn}</strong></p>
+        </div>
       </div>
       <div style="text-align:right">
-        <p style="margin:0;font-size:28px;font-weight:800;color:#1e3a5f;letter-spacing:1px">COTIZACIÓN</p>
+        <p style="margin:0;font-size:26px;font-weight:800;color:#1e3a5f;letter-spacing:1px">COTIZACIÓN</p>
         <p style="margin:4px 0 0;font-family:monospace;font-size:13px;color:#374151;font-weight:600">${cotizacion.numero}</p>
-        ${cotizacion.nombreProyecto ? `<p style="margin:4px 0 0;font-size:13px;color:#6b7280">${cotizacion.nombreProyecto}</p>` : ""}
       </div>
     </div>
 
     <!-- Fechas + Cliente -->
-    <div style="padding:20px 40px;display:grid;grid-template-columns:1fr 1fr;gap:20px;border-bottom:1px solid #e5e7eb">
+    <div style="padding:18px 40px;display:grid;grid-template-columns:1fr 1fr;gap:20px;border-bottom:1px solid #e5e7eb">
       <div>
-        <p style="margin:0 0 10px;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;font-weight:600">Para</p>
+        <p style="margin:0 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;font-weight:600">Para</p>
         <p style="margin:0;font-weight:700;font-size:15px;color:#111827">${cotizacion.cliente.nombre}</p>
-        <p style="margin:2px 0 0;font-family:monospace;font-size:13px;color:#374151">RTN: ${cotizacion.cliente.rtn || "—"}</p>
+        <p style="margin:2px 0 0;font-family:monospace;font-size:12px;color:#374151">RTN: ${cotizacion.cliente.rtn || "—"}</p>
+        ${cotizacion.cliente.direccion ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280">${cotizacion.cliente.direccion}</p>` : ""}
         ${cotizacion.cliente.correo ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280">${cotizacion.cliente.correo}</p>` : ""}
         ${cotizacion.cliente.telefono ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280">${cotizacion.cliente.telefono}</p>` : ""}
-        ${cotizacion.cliente.direccion ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280">${cotizacion.cliente.direccion}</p>` : ""}
       </div>
       <div style="text-align:right">
         <div style="margin-bottom:8px">
@@ -77,7 +88,7 @@ export function generarHtmlCotizacion(cotizacion: Cotizacion): string {
     </div>
 
     <!-- Tabla de servicios -->
-    <div style="padding:24px 40px 0">
+    <div style="padding:20px 40px 0">
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="border-bottom:2px solid #1e3a5f">
@@ -88,6 +99,7 @@ export function generarHtmlCotizacion(cotizacion: Cotizacion): string {
           </tr>
         </thead>
         <tbody>
+          ${proyectoFila}
           ${lineas}
           ${ultimaFila}
         </tbody>
@@ -95,15 +107,24 @@ export function generarHtmlCotizacion(cotizacion: Cotizacion): string {
     </div>
 
     <!-- Totales -->
-    <div style="padding:16px 40px 24px;display:flex;justify-content:flex-end">
-      <div style="min-width:260px">
+    <div style="padding:14px 40px 20px;display:flex;justify-content:flex-end">
+      <div style="min-width:270px">
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
           <span style="color:#6b7280">Sub-Total</span>
           <span style="font-family:monospace;color:#374151">${fmtUSD(cotizacion.subtotal)}</span>
         </div>
+        ${descuento > 0 ? `
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+          <span style="color:#6b7280">Descuento</span>
+          <span style="font-family:monospace;color:#dc2626">-${fmtUSD(descuento)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+          <span style="color:#6b7280">Importe Gravado</span>
+          <span style="font-family:monospace;color:#374151">${fmtUSD(gravado)}</span>
+        </div>` : ""}
         <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
           <span style="color:#6b7280">ISV (15%)</span>
-          <span style="font-family:monospace;color:#374151">${fmtUSD(cotizacion.isv)}</span>
+          <span style="font-family:monospace;color:#374151">${fmtUSD(isv)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;padding:9px 12px;background:#1e3a5f;border-radius:5px;margin-top:6px">
           <span style="color:#fff;font-weight:700;font-size:14px">Total (USD)</span>
@@ -113,12 +134,12 @@ export function generarHtmlCotizacion(cotizacion: Cotizacion): string {
     </div>
 
     ${cotizacion.notas ? `
-    <div style="padding:0 40px 16px">
+    <div style="padding:0 40px 14px">
       <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#9ca3af;font-weight:600">Notas</p>
       <p style="margin:0;font-size:13px;color:#374151">${cotizacion.notas.replace(/\n/g, "<br>")}</p>
     </div>` : ""}
 
-    <!-- Footer -->
+    <!-- Pie de página -->
     <div style="padding:14px 40px;background:#f8f9fb;border-top:1px solid #e5e7eb;text-align:center">
       <p style="margin:0;font-size:12px;font-weight:700;color:#1e3a5f;letter-spacing:.5px">
         ESTA COTIZACIÓN ES VÁLIDA HASTA EL ${fechaDestacada(cotizacion.fechaValidez)}

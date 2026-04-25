@@ -68,6 +68,8 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
   const [catalogoKey, setCatalogoKey] = useState(0);
   const [guardando, setGuardando] = useState(false);
 
+  const [descuento, setDescuento] = useState(0);
+
   // Proyecto / contrato
   const [esProyecto, setEsProyecto] = useState(false);
   const [formHitos, setFormHitos] = useState<FormHito[]>([
@@ -104,8 +106,9 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
   })();
 
   const subtotal = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * (Number(l.precioUnitario) || 0), 0);
-  const isv = subtotal * EMPRESA.isv;
-  const total = subtotal + isv;
+  const gravado = subtotal - descuento;
+  const isv = gravado * EMPRESA.isv;
+  const total = gravado + isv;
 
   const sumaHitos = formHitos.reduce((s, h) => s + (parseFloat(h.porcentaje) || 0), 0);
 
@@ -175,7 +178,8 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
       }));
 
       const sub = lineasCalc.reduce((s, l) => s + l.subtotal, 0);
-      const isvCalc = sub * EMPRESA.isv;
+      const gravCalc = sub - descuento;
+      const isvCalc = gravCalc * EMPRESA.isv;
 
       const facturaId = generarId();
       const factura: Factura = {
@@ -188,8 +192,9 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
         cliente: clienteSeleccionado,
         lineas: lineasCalc,
         subtotal: sub,
+        descuento,
         isv: isvCalc,
-        total: sub + isvCalc,
+        total: gravCalc + isvCalc,
         estado: "emitida",
         metodoPago: data.metodoPago as MetodoPago,
         condicionPago: dias,
@@ -527,6 +532,24 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-mono w-32 text-right">{formatLempiras(subtotal)}</span>
               </div>
+              <div className="flex items-center gap-8">
+                <span className="text-muted-foreground">Descuento</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={descuento || ""}
+                  onChange={(e) => setDescuento(Number(e.target.value) || 0)}
+                  className="w-32 text-right font-mono h-7 text-sm px-2"
+                  placeholder="0.00"
+                />
+              </div>
+              {descuento > 0 && (
+                <div className="flex gap-8">
+                  <span className="text-muted-foreground">Gravado</span>
+                  <span className="font-mono w-32 text-right">{formatLempiras(gravado)}</span>
+                </div>
+              )}
               <div className="flex gap-8">
                 <span className="text-muted-foreground">ISV (15%)</span>
                 <span className="font-mono w-32 text-right">{formatLempiras(isv)}</span>

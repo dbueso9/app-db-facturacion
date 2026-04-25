@@ -48,6 +48,7 @@ export default function EditarCotizacionClient({
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente>(cotizacion.cliente);
   const [catalogoKey, setCatalogoKey] = useState(0);
   const [guardando, setGuardando] = useState(false);
+  const [descuento, setDescuento] = useState(cotizacion.descuento ?? 0);
 
   const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -69,8 +70,9 @@ export default function EditarCotizacionClient({
   const lineas = watch("lineas");
 
   const subtotal = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * (Number(l.precioUnitario) || 0), 0);
-  const isv = subtotal * EMPRESA.isv;
-  const total = subtotal + isv;
+  const gravado = subtotal - descuento;
+  const isv = gravado * EMPRESA.isv;
+  const total = gravado + isv;
 
   function onClienteChange(id: string) {
     const c = clientes.find((c) => c.id === id);
@@ -101,7 +103,8 @@ export default function EditarCotizacionClient({
         subtotal: Number(l.cantidad) * Number(l.precioUnitario),
       }));
       const sub = lineasCalc.reduce((s, l) => s + l.subtotal, 0);
-      const isvCalc = sub * EMPRESA.isv;
+      const gravCalc = sub - descuento;
+      const isvCalc = gravCalc * EMPRESA.isv;
 
       await saveCotizacion({
         ...cotizacion,
@@ -111,8 +114,9 @@ export default function EditarCotizacionClient({
         cliente: clienteSeleccionado,
         lineas: lineasCalc,
         subtotal: sub,
+        descuento,
         isv: isvCalc,
-        total: sub + isvCalc,
+        total: gravCalc + isvCalc,
         nombreProyecto: data.nombreProyecto || undefined,
         notas: data.notas || "",
       });
@@ -267,6 +271,24 @@ export default function EditarCotizacionClient({
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-mono w-32 text-right">{formatDolares(subtotal)}</span>
               </div>
+              <div className="flex items-center gap-8">
+                <span className="text-muted-foreground">Descuento</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={descuento || ""}
+                  onChange={(e) => setDescuento(Number(e.target.value) || 0)}
+                  className="w-32 text-right font-mono h-7 text-sm px-2"
+                  placeholder="0.00"
+                />
+              </div>
+              {descuento > 0 && (
+                <div className="flex gap-8">
+                  <span className="text-muted-foreground">Gravado</span>
+                  <span className="font-mono w-32 text-right">{formatDolares(gravado)}</span>
+                </div>
+              )}
               <div className="flex gap-8">
                 <span className="text-muted-foreground">ISV (15%)</span>
                 <span className="font-mono w-32 text-right">{formatDolares(isv)}</span>

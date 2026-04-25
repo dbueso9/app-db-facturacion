@@ -2,15 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -80,8 +80,9 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
   const estado = BADGE_ESTADO[estadoActual];
   const yaConvertida = !!cotizacion.convertidaAFacturaId || !!cotizacion.convertidaAContratoId;
   const tasa = tasaCambio?.venta || 1;
-
   const montoLPS = formatLempiras(cotizacion.total * tasa);
+  const descuento = cotizacion.descuento ?? 0;
+  const gravado = cotizacion.subtotal - descuento;
 
   async function cambiarEstado(nuevoEstado: string | null) {
     if (!nuevoEstado || nuevoEstado === estadoActual) return;
@@ -109,42 +110,25 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
     setErrorConversion(null);
     try {
       const { secuencia, numero } = await crearNumeroFactura();
-
       const lineas = cotizacion.lineas.map((l) => {
         const precioLPS = Number((l.precioUnitario * tasa).toFixed(2));
         const subtotalLPS = Number((l.cantidad * precioLPS).toFixed(2));
-        return {
-          id: generarId(),
-          descripcion: l.descripcion,
-          cantidad: l.cantidad,
-          precioUnitario: precioLPS,
-          subtotal: subtotalLPS,
-        };
+        return { id: generarId(), descripcion: l.descripcion, cantidad: l.cantidad, precioUnitario: precioLPS, subtotal: subtotalLPS };
       });
-
       const sub = Number(lineas.reduce((s, l) => s + l.subtotal, 0).toFixed(2));
-      const isvCalc = Number((sub * EMPRESA.isv).toFixed(2));
-
+      const desc = Number((descuento * tasa).toFixed(2));
+      const grav = sub - desc;
+      const isvCalc = Number((grav * EMPRESA.isv).toFixed(2));
       const factura: Factura = {
-        id: generarId(),
-        numero,
-        secuencia,
+        id: generarId(), numero, secuencia,
         fecha: new Date().toISOString().split("T")[0],
         fechaVencimiento: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-        clienteId: cotizacion.clienteId,
-        cliente: cotizacion.cliente,
-        lineas,
-        subtotal: sub,
-        isv: isvCalc,
-        total: sub + isvCalc,
-        estado: "emitida",
-        condicionPago: 30,
-        tasaCambio: tasaCambio?.venta,
-        nombreProyecto: cotizacion.nombreProyecto,
-        notas: cotizacion.notas,
+        clienteId: cotizacion.clienteId, cliente: cotizacion.cliente,
+        lineas, subtotal: sub, descuento: desc, isv: isvCalc, total: grav + isvCalc,
+        estado: "emitida", condicionPago: 30, tasaCambio: tasaCambio?.venta,
+        nombreProyecto: cotizacion.nombreProyecto, notas: cotizacion.notas,
         creadaEn: new Date().toISOString(),
       };
-
       await saveFactura(factura);
       await marcarConvertida(cotizacion.id, factura.id);
       router.push(`/facturas/${factura.id}`);
@@ -161,6 +145,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
     try {
       const html2canvas = (await import("html2canvas")).default;
       const { generarHtmlCotizacion } = await import("@/lib/email/cotizacion-html");
+      const logoUrl = `${window.location.origin}/Logo DB.png`;
 
       iframe = document.createElement("iframe");
       iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;height:1200px;border:none;";
@@ -168,7 +153,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
 
       await new Promise<void>((resolve) => {
         iframe!.onload = () => resolve();
-        iframe!.srcdoc = generarHtmlCotizacion(cotizacion);
+        iframe!.srcdoc = generarHtmlCotizacion(cotizacion, logoUrl);
         setTimeout(resolve, 1500);
       });
 
@@ -176,11 +161,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
       if (!iframeDoc) throw new Error("No se pudo acceder al documento");
 
       const canvas = await html2canvas(iframeDoc.body, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#f8fafc",
-        logging: false,
-        windowWidth: 794,
+        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false, windowWidth: 794,
       });
 
       const imgData = canvas.toDataURL("image/png");
@@ -188,11 +169,8 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = (canvas.height * pdfW) / canvas.width;
       pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-      const partes = [
-        cotizacion.numero,
-        cotizacion.cliente.nombre,
-        cotizacion.fecha,
-      ].map((s) => s.replace(/[/\\?%*:|"<>]/g, "-").trim());
+      const partes = [cotizacion.numero, cotizacion.cliente.nombre, cotizacion.fecha]
+        .map((s) => s.replace(/[/\\?%*:|"<>]/g, "-").trim());
       pdf.save(`${partes.join(" - ")}.pdf`);
     } catch (err) {
       setErrorPdf(err instanceof Error ? err.message : "Error al generar PDF");
@@ -206,15 +184,8 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
   const sumaHitosContrato = formHitosContrato.reduce((s, h) => s + (parseFloat(h.porcentaje) || 0), 0);
 
   function abrirModalContrato() {
-    setFormProyecto({
-      nombreProyecto: cotizacion.nombreProyecto || "",
-      fechaInicio: new Date().toISOString().split("T")[0],
-      notas: cotizacion.notas || "",
-    });
-    setFormHitosContrato([
-      { id: generarId(), nombre: "Anticipo", porcentaje: "50" },
-      { id: generarId(), nombre: "Entrega Final", porcentaje: "50" },
-    ]);
+    setFormProyecto({ nombreProyecto: cotizacion.nombreProyecto || "", fechaInicio: new Date().toISOString().split("T")[0], notas: cotizacion.notas || "" });
+    setFormHitosContrato([{ id: generarId(), nombre: "Anticipo", porcentaje: "50" }, { id: generarId(), nombre: "Entrega Final", porcentaje: "50" }]);
     setErrorHitosContrato(null);
     setModalContrato(true);
   }
@@ -222,49 +193,25 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
   function addHitoContratoRow() {
     setFormHitosContrato((prev) => [...prev, { id: generarId(), nombre: "", porcentaje: "" }]);
   }
-
   function removeHitoContratoRow(idx: number) {
     setFormHitosContrato((prev) => prev.filter((_, i) => i !== idx));
   }
-
   function updateHitoContratoRow(idx: number, field: "nombre" | "porcentaje", value: string) {
     setFormHitosContrato((prev) => prev.map((h, i) => (i === idx ? { ...h, [field]: value } : h)));
   }
 
   async function confirmarCrearContrato() {
-    if (!formProyecto.nombreProyecto.trim()) {
-      setErrorHitosContrato("El nombre del proyecto es requerido");
-      return;
-    }
-    if (Math.abs(sumaHitosContrato - 100) > 0.01) {
-      setErrorHitosContrato(`Los porcentajes deben sumar exactamente 100% (actualmente ${sumaHitosContrato.toFixed(2)}%)`);
-      return;
-    }
-    if (formHitosContrato.some((h) => !h.nombre.trim())) {
-      setErrorHitosContrato("Todos los hitos deben tener un nombre");
-      return;
-    }
-
+    if (!formProyecto.nombreProyecto.trim()) { setErrorHitosContrato("El nombre del proyecto es requerido"); return; }
+    if (Math.abs(sumaHitosContrato - 100) > 0.01) { setErrorHitosContrato(`Los porcentajes deben sumar exactamente 100% (actualmente ${sumaHitosContrato.toFixed(2)}%)`); return; }
+    if (formHitosContrato.some((h) => !h.nombre.trim())) { setErrorHitosContrato("Todos los hitos deben tener un nombre"); return; }
     setCreandoContrato(true);
     setErrorHitosContrato(null);
     try {
       const hitos = formHitosContrato.map((h) => ({
-        id: h.id,
-        nombre: h.nombre.trim(),
-        porcentaje: parseFloat(h.porcentaje),
+        id: h.id, nombre: h.nombre.trim(), porcentaje: parseFloat(h.porcentaje),
         monto: Number(((valorBaseContrato * parseFloat(h.porcentaje)) / 100).toFixed(2)),
       }));
-
-      await crearProyecto({
-        clienteId: cotizacion.clienteId,
-        nombreProyecto: formProyecto.nombreProyecto.trim(),
-        valorBase: valorBaseContrato,
-        fechaInicio: formProyecto.fechaInicio,
-        notas: formProyecto.notas,
-        cotizacionId: cotizacion.id,
-        hitos,
-      });
-
+      await crearProyecto({ clienteId: cotizacion.clienteId, nombreProyecto: formProyecto.nombreProyecto.trim(), valorBase: valorBaseContrato, fechaInicio: formProyecto.fechaInicio, notas: formProyecto.notas, cotizacionId: cotizacion.id, hitos });
       router.push(`/clientes/${cotizacion.clienteId}`);
     } catch (err) {
       setErrorHitosContrato(err instanceof Error ? err.message : "Error al crear el contrato");
@@ -281,7 +228,8 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
       try {
         const { generarHtmlCotizacion } = await import("@/lib/email/cotizacion-html");
         const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
-        pdfBase64 = await pdfBase64FromHtml(generarHtmlCotizacion(cotizacion));
+        const logoUrl = `${window.location.origin}/Logo DB.png`;
+        pdfBase64 = await pdfBase64FromHtml(generarHtmlCotizacion(cotizacion, logoUrl));
       } catch {
         // PDF falló; se envía sin adjunto
       }
@@ -302,8 +250,8 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-4">
+      {/* Controles */}
+      <div className="print:hidden flex items-start gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -314,16 +262,14 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
             {cotizacion.convertidaAFacturaId && (
               <Link href={`/facturas/${cotizacion.convertidaAFacturaId}`}>
                 <Badge variant="outline" className="text-green-400 border-green-400 cursor-pointer hover:bg-green-400/10">
-                  <FileText className="h-3 w-3 mr-1" />
-                  Ver Factura
+                  <FileText className="h-3 w-3 mr-1" />Ver Factura
                 </Badge>
               </Link>
             )}
             {cotizacion.convertidaAContratoId && (
               <Link href={`/clientes/${cotizacion.clienteId}`}>
                 <Badge variant="outline" className="text-purple-400 border-purple-400 cursor-pointer hover:bg-purple-400/10">
-                  <Layers className="h-3 w-3 mr-1" />
-                  Ver Proyecto
+                  <Layers className="h-3 w-3 mr-1" />Ver Proyecto
                 </Badge>
               </Link>
             )}
@@ -336,9 +282,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <Select value={estadoActual} onValueChange={cambiarEstado} disabled={cambiando || yaConvertida}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
               {ESTADOS_DISPONIBLES.map((e) => (
                 <SelectItem key={e} value={e}>{BADGE_ESTADO[e].label}</SelectItem>
@@ -347,8 +291,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           </Select>
 
           <Button variant="outline" size="sm" onClick={() => { setModalEmail(true); setEnvioResultado(null); }}>
-            <Send className="h-4 w-4 mr-1" />
-            Enviar Correo
+            <Send className="h-4 w-4 mr-1" />Enviar Correo
           </Button>
 
           <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportandoPdf}>
@@ -359,12 +302,10 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           {!yaConvertida && estadoActual !== "rechazada" && (
             <>
               <Button variant="outline" onClick={abrirModalContrato} disabled={creandoContrato}>
-                <Layers className="h-4 w-4 mr-1" />
-                Crear Contrato
+                <Layers className="h-4 w-4 mr-1" />Crear Contrato
               </Button>
               <Button onClick={() => { setConfirmandoConvertir(true); setErrorConversion(null); }} disabled={convirtiendo}>
-                <Zap className="h-4 w-4 mr-1" />
-                Convertir en Factura
+                <Zap className="h-4 w-4 mr-1" />Convertir en Factura
               </Button>
             </>
           )}
@@ -381,135 +322,181 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
         </div>
       </div>
 
-      {/* Error de conversión */}
       {errorConversion && (
-        <div className="flex items-center gap-2 bg-red-950 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{errorConversion}</span>
+        <div className="print:hidden flex items-center gap-2 bg-red-950 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0" /><span>{errorConversion}</span>
         </div>
       )}
-
-      {/* Error PDF */}
       {errorPdf && (
-        <div className="flex items-center gap-2 bg-red-950 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm">
-          <XCircle className="h-4 w-4 shrink-0" />
-          <span>{errorPdf}</span>
+        <div className="print:hidden flex items-center gap-2 bg-red-950 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm">
+          <XCircle className="h-4 w-4 shrink-0" /><span>{errorPdf}</span>
         </div>
       )}
 
-      {/* Documento visible en pantalla */}
-      <Card>
-        <CardContent className="pt-6 space-y-6">
-          <div className="grid grid-cols-2 gap-8">
+      {/* Documento previsualización */}
+      <div id="cotizacion-documento" className="bg-white text-black max-w-3xl mx-auto p-10 shadow-lg print:shadow-none print:p-6 rounded-lg">
+
+        {/* Encabezado empresa */}
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex items-center gap-4">
+            <Image src="/Logo DB.png" alt="DB Consulting" width={64} height={64} className="rounded-lg object-contain flex-shrink-0" />
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">De</p>
-              <p className="font-bold text-lg">{EMPRESA.nombre}</p>
-              <p className="text-sm text-muted-foreground">{EMPRESA.direccion}</p>
-              <p className="text-sm text-muted-foreground">{EMPRESA.correo}</p>
-              <p className="text-sm text-muted-foreground font-mono">RTN: {EMPRESA.rtn}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Para</p>
-              <p className="font-bold text-lg">{cotizacion.cliente.nombre}</p>
-              {cotizacion.cliente.correo && (
-                <p className="text-sm font-medium text-foreground">{cotizacion.cliente.correo}</p>
-              )}
-              {cotizacion.cliente.telefono && (
-                <p className="text-sm text-muted-foreground">{cotizacion.cliente.telefono}</p>
-              )}
-              {cotizacion.cliente.rtn && (
-                <p className="text-sm font-mono text-muted-foreground">RTN: {cotizacion.cliente.rtn}</p>
-              )}
-              {cotizacion.cliente.direccion && (
-                <p className="text-sm text-muted-foreground">{cotizacion.cliente.direccion}</p>
-              )}
+              <h1 className="text-xl font-bold text-gray-900">{EMPRESA.nombre}</h1>
+              <p className="text-sm text-gray-600">{EMPRESA.direccion}</p>
+              <p className="text-sm text-gray-600">Tel: {EMPRESA.telefono}</p>
+              <p className="text-sm text-gray-600">{EMPRESA.correo}</p>
+              <p className="text-sm text-gray-600 font-mono">RTN: {EMPRESA.rtn}</p>
             </div>
           </div>
-
-          <div className="grid grid-cols-3 gap-4 text-sm bg-muted/40 rounded-lg p-4">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Número</p>
-              <p className="font-mono font-semibold mt-1">{cotizacion.numero}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Fecha</p>
-              <p className="font-semibold mt-1">{formatFecha(cotizacion.fecha)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Válida hasta</p>
-              <p className="font-semibold mt-1">{formatFecha(cotizacion.fechaValidez)}</p>
+          <div className="text-right">
+            <h2 className="text-2xl font-bold text-gray-900">COTIZACIÓN</h2>
+            <p className="text-sm font-mono text-gray-600 mt-1">{cotizacion.numero}</p>
+            <div className="print:hidden mt-2">
+              <Badge variant={estado.variant}>{estado.label}</Badge>
             </div>
           </div>
+        </div>
 
-          {cotizacion.nombreProyecto && (
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Proyecto</p>
-              <p className="font-semibold mt-1">{cotizacion.nombreProyecto}</p>
-            </div>
-          )}
-
-          <Separator />
-
-          <div>
-            <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground uppercase tracking-wide pb-2 border-b">
-              <span className="col-span-6">Descripción</span>
-              <span className="col-span-2 text-center">Cant.</span>
-              <span className="col-span-2 text-right">Precio Unit. (USD)</span>
-              <span className="col-span-2 text-right">Subtotal (USD)</span>
-            </div>
-            {cotizacion.lineas.map((l) => (
-              <div key={l.id} className="grid grid-cols-12 gap-2 py-3 border-b border-muted text-sm">
-                <span className="col-span-6">{l.descripcion}</span>
-                <span className="col-span-2 text-center text-muted-foreground">{l.cantidad}</span>
-                <span className="col-span-2 text-right font-mono">{formatDolares(l.precioUnitario)}</span>
-                <span className="col-span-2 text-right font-mono font-semibold">{formatDolares(l.subtotal)}</span>
-              </div>
-            ))}
-            <div className="py-1.5 border-b border-muted text-xs text-muted-foreground text-center italic tracking-wide">
-              — Ultima Fila —
-            </div>
+        {/* Fechas y cliente */}
+        <div className="grid grid-cols-2 gap-6 mb-4 text-sm border border-gray-200 rounded-lg p-3">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Fecha de Emisión</p>
+            <p className="font-semibold text-gray-900">{formatFecha(cotizacion.fecha)}</p>
           </div>
+          <div className="space-y-1 text-right">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Válida Hasta</p>
+            <p className="font-semibold text-gray-900">{formatFecha(cotizacion.fechaValidez)}</p>
+          </div>
+        </div>
 
-          <div className="flex flex-col items-end gap-1 text-sm">
-            <div className="flex gap-8">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-mono w-32 text-right">{formatDolares(cotizacion.subtotal)}</span>
+        {/* Datos del cliente */}
+        <div className="border border-gray-200 rounded-lg p-3 mb-5 text-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Para</p>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Nombre / Razón Social</p>
+              <p className="font-bold text-gray-900 mt-0.5">{cotizacion.cliente.nombre}</p>
             </div>
-            <div className="flex gap-8">
-              <span className="text-muted-foreground">ISV (15%)</span>
-              <span className="font-mono w-32 text-right">{formatDolares(cotizacion.isv)}</span>
-            </div>
-            <Separator className="w-48 my-1" />
-            <div className="flex gap-8 text-base">
-              <span className="font-bold">Total</span>
-              <span className="font-mono font-bold w-32 text-right border-2 border-foreground px-2 py-0.5 rounded">{formatDolares(cotizacion.total)}</span>
-            </div>
-            {tasaCambio && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Equivalente aprox. <span className="font-medium text-foreground">{montoLPS}</span> · Tasa BCH venta L.{tasaCambio.venta.toFixed(4)}
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">RTN</p>
+              <p className="font-mono font-semibold text-gray-900 mt-0.5">
+                {cotizacion.cliente.rtn || <span className="text-gray-400 italic text-xs">Sin RTN</span>}
               </p>
+            </div>
+            {cotizacion.cliente.direccion && (
+              <div className="col-span-2">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Dirección</p>
+                <p className="text-gray-800 mt-0.5">{cotizacion.cliente.direccion}</p>
+              </div>
+            )}
+            {cotizacion.cliente.correo && (
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Correo</p>
+                <p className="text-gray-800 mt-0.5">{cotizacion.cliente.correo}</p>
+              </div>
+            )}
+            {cotizacion.cliente.telefono && (
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Teléfono</p>
+                <p className="text-gray-800 mt-0.5">{cotizacion.cliente.telefono}</p>
+              </div>
             )}
           </div>
+        </div>
 
-          {cotizacion.notas && (
-            <>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Notas</p>
-                <p className="text-sm whitespace-pre-wrap">{cotizacion.notas}</p>
-              </div>
-            </>
-          )}
+        {/* Tabla de servicios */}
+        <table className="w-full text-sm mb-5 table-fixed">
+          <colgroup>
+            <col className="w-[48%]" />
+            <col className="w-[10%]" />
+            <col className="w-[21%]" />
+            <col className="w-[21%]" />
+          </colgroup>
+          <thead>
+            <tr className="bg-gray-100 border-b-2 border-gray-800">
+              <th className="text-left py-2 px-2 font-semibold text-gray-700">Descripción del Servicio</th>
+              <th className="text-center py-2 px-2 font-semibold text-gray-700">Cant.</th>
+              <th className="text-right py-2 px-2 font-semibold text-gray-700">Precio Unit. (USD)</th>
+              <th className="text-right py-2 px-2 font-semibold text-gray-700">Subtotal (USD)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cotizacion.nombreProyecto && (
+              <tr className="bg-blue-50/60">
+                <td colSpan={4} className="py-1.5 px-2 text-xs font-bold text-[#1e3a5f] tracking-wide">{cotizacion.nombreProyecto}</td>
+              </tr>
+            )}
+            {cotizacion.lineas.map((l) => (
+              <tr key={l.id} className="border-b border-gray-100">
+                <td className="py-2 px-2 text-gray-800">{l.descripcion}</td>
+                <td className="py-2 px-2 text-center text-gray-600">{l.cantidad}</td>
+                <td className="py-2 px-2 text-right font-mono text-gray-700">{formatDolares(l.precioUnitario)}</td>
+                <td className="py-2 px-2 text-right font-mono font-medium">{formatDolares(l.subtotal)}</td>
+              </tr>
+            ))}
+            <tr className="border-b border-gray-100">
+              <td colSpan={4} className="py-1.5 px-2 text-center text-xs text-gray-400 italic tracking-wide">— Última Fila —</td>
+            </tr>
+          </tbody>
+        </table>
 
-          <Separator />
-          <div className="space-y-2">
-            <div className="text-xs text-center font-bold border border-foreground/30 rounded px-3 py-2 bg-muted/30 uppercase tracking-wide">
-              ESTA COTIZACIÓN ES VÁLIDA HASTA EL {formatValidezDestacado(cotizacion.fechaValidez)}
+        {/* Totales */}
+        <div className="flex justify-end mb-5">
+          <div className="w-72 text-sm border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+              <span className="text-gray-600">Sub-Total</span>
+              <span className="font-mono">{formatDolares(cotizacion.subtotal)}</span>
             </div>
-            <p className="text-xs text-center text-muted-foreground italic">Los precios están sujetos a cambio.</p>
+            {descuento > 0 && (
+              <>
+                <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+                  <span className="text-gray-600">Descuento</span>
+                  <span className="font-mono text-red-600">-{formatDolares(descuento)}</span>
+                </div>
+                <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+                  <span className="text-gray-600">Importe Gravado</span>
+                  <span className="font-mono">{formatDolares(gravado)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+              <span className="text-gray-600">ISV (15%)</span>
+              <span className="font-mono">{formatDolares(cotizacion.isv)}</span>
+            </div>
+            <div className="flex justify-between px-4 py-3 bg-[#1e3a5f] text-white font-bold text-base">
+              <span>Total (USD)</span>
+              <span className="font-mono">{formatDolares(cotizacion.total)}</span>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        {tasaCambio && (
+          <p className="text-xs text-right text-gray-500 -mt-3 mb-4">
+            Equiv. aprox. <span className="font-medium text-gray-700">{montoLPS}</span> · Tasa BCH L.{tasaCambio.venta.toFixed(4)}
+          </p>
+        )}
+
+        {cotizacion.notas && (
+          <>
+            <Separator className="mb-3" />
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Notas</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{cotizacion.notas}</p>
+            </div>
+          </>
+        )}
+
+        {/* Vigencia */}
+        <div className="text-xs text-center font-bold text-gray-800 border border-gray-800 rounded px-3 py-2 mb-2 uppercase tracking-wide">
+          ESTA COTIZACIÓN ES VÁLIDA HASTA EL {formatValidezDestacado(cotizacion.fechaValidez)}
+        </div>
+        <p className="text-xs text-center text-gray-500 italic mb-4">Los precios están sujetos a cambio.</p>
+
+        {/* Footer */}
+        <div className="text-xs text-gray-500 border-t border-gray-300 pt-3 text-center">
+          <p>{EMPRESA.nombre} · RTN {EMPRESA.rtn} · {EMPRESA.correo} · Tel: {EMPRESA.telefono}</p>
+        </div>
+      </div>
 
       {/* Dialog convertir */}
       <Dialog open={confirmandoConvertir} onOpenChange={setConfirmandoConvertir}>
@@ -523,9 +510,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
                   Tasa venta: L.{tasaCambio.venta.toFixed(4)} · Total factura: {montoLPS}
                 </span>
               ) : (
-                <span className="block mt-2 text-yellow-400">
-                  Sin tasa de cambio disponible — se usarán los montos tal cual.
-                </span>
+                <span className="block mt-2 text-yellow-400">Sin tasa de cambio disponible — se usarán los montos tal cual.</span>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -563,17 +548,13 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           <DialogHeader>
             <DialogTitle>Crear Contrato con Plan de Pagos</DialogTitle>
             <DialogDescription>
-              Se creará un contrato de proyecto con hitos de facturación independientes. Cada hito genera su propia factura al ser alcanzado.
+              Se creará un contrato de proyecto con hitos de facturación independientes.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
               <Label>Nombre del Proyecto *</Label>
-              <Input
-                value={formProyecto.nombreProyecto}
-                onChange={(e) => setFormProyecto({ ...formProyecto, nombreProyecto: e.target.value })}
-                placeholder="Ej: Sistema de Inventario, Portal Web..."
-              />
+              <Input value={formProyecto.nombreProyecto} onChange={(e) => setFormProyecto({ ...formProyecto, nombreProyecto: e.target.value })} placeholder="Ej: Sistema de Inventario, Portal Web..." />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -581,53 +562,30 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
                 <div className="flex items-center h-9 px-3 border rounded-md bg-muted/50 text-sm font-mono text-muted-foreground">
                   {new Intl.NumberFormat("es-HN", { style: "currency", currency: "HNL", minimumFractionDigits: 2 }).format(valorBaseContrato)}
                 </div>
-                {tasaCambio && (
-                  <p className="text-xs text-muted-foreground">Tasa BCH: L.{tasaCambio.venta.toFixed(4)} · {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cotizacion.total)} convertidos</p>
-                )}
               </div>
               <div className="space-y-1">
                 <Label>Fecha de Inicio *</Label>
-                <Input
-                  type="date"
-                  value={formProyecto.fechaInicio}
-                  onChange={(e) => setFormProyecto({ ...formProyecto, fechaInicio: e.target.value })}
-                />
+                <Input type="date" value={formProyecto.fechaInicio} onChange={(e) => setFormProyecto({ ...formProyecto, fechaInicio: e.target.value })} />
               </div>
             </div>
-
             <Separator />
             <p className="text-sm font-medium">Plan de Pagos (Hitos)</p>
-
             <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
               <span className="col-span-6">Nombre del Hito</span>
               <span className="col-span-3 text-center">%</span>
               <span className="col-span-2 text-right">Monto</span>
               <span className="col-span-1"></span>
             </div>
-
             {formHitosContrato.map((h, idx) => {
               const pct = parseFloat(h.porcentaje) || 0;
               const monto = (valorBaseContrato * pct) / 100;
               return (
                 <div key={h.id} className="grid grid-cols-12 gap-2 items-center">
                   <div className="col-span-6">
-                    <Input
-                      value={h.nombre}
-                      onChange={(e) => updateHitoContratoRow(idx, "nombre", e.target.value)}
-                      placeholder="Ej: Anticipo, Pruebas UAT..."
-                      className="h-8 text-sm"
-                    />
+                    <Input value={h.nombre} onChange={(e) => updateHitoContratoRow(idx, "nombre", e.target.value)} placeholder="Ej: Anticipo..." className="h-8 text-sm" />
                   </div>
                   <div className="col-span-3">
-                    <Input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={h.porcentaje}
-                      onChange={(e) => updateHitoContratoRow(idx, "porcentaje", e.target.value)}
-                      className="h-8 text-sm text-center"
-                    />
+                    <Input type="number" min="0" max="100" step="0.01" value={h.porcentaje} onChange={(e) => updateHitoContratoRow(idx, "porcentaje", e.target.value)} className="h-8 text-sm text-center" />
                   </div>
                   <div className="col-span-2 text-right text-xs font-mono text-muted-foreground">
                     {new Intl.NumberFormat("es-HN", { style: "currency", currency: "HNL", minimumFractionDigits: 0 }).format(monto)}
@@ -640,30 +598,22 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
                 </div>
               );
             })}
-
             <Button type="button" variant="outline" size="sm" onClick={addHitoContratoRow} className="w-full">
-              <Plus className="h-4 w-4 mr-1" />
-              Agregar Hito
+              <Plus className="h-4 w-4 mr-1" />Agregar Hito
             </Button>
-
             <div className={`flex items-center justify-between text-sm px-2 py-1.5 rounded ${Math.abs(sumaHitosContrato - 100) < 0.01 ? "bg-green-50/10 text-green-500" : "bg-red-950/30 text-red-400"}`}>
               <span>Suma de porcentajes</span>
               <span className="font-mono font-bold">{sumaHitosContrato.toFixed(2)}% / 100%</span>
             </div>
-
             {errorHitosContrato && (
               <div className="flex items-center gap-2 text-sm text-red-400 bg-red-950/30 border border-red-800 rounded px-3 py-2">
-                <XCircle className="h-4 w-4 shrink-0" />
-                {errorHitosContrato}
+                <XCircle className="h-4 w-4 shrink-0" />{errorHitosContrato}
               </div>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalContrato(false)}>Cancelar</Button>
-            <Button
-              onClick={confirmarCrearContrato}
-              disabled={creandoContrato || Math.abs(sumaHitosContrato - 100) > 0.01 || !formProyecto.nombreProyecto.trim() || !formProyecto.fechaInicio}
-            >
+            <Button onClick={confirmarCrearContrato} disabled={creandoContrato || Math.abs(sumaHitosContrato - 100) > 0.01 || !formProyecto.nombreProyecto.trim() || !formProyecto.fechaInicio}>
               <Layers className="h-4 w-4 mr-1" />
               {creandoContrato ? "Creando..." : "Crear Contrato con Hitos"}
             </Button>
@@ -676,19 +626,12 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Enviar Cotización por Correo</DialogTitle>
-            <DialogDescription>
-              {cotizacion.numero}{cotizacion.nombreProyecto ? ` · ${cotizacion.nombreProyecto}` : ""}
-            </DialogDescription>
+            <DialogDescription>{cotizacion.numero}{cotizacion.nombreProyecto ? ` · ${cotizacion.nombreProyecto}` : ""}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1">
               <Label>Para *</Label>
-              <Input
-                type="email"
-                value={emailPara}
-                onChange={(e) => setEmailPara(e.target.value)}
-                placeholder="correo@cliente.com"
-              />
+              <Input type="email" value={emailPara} onChange={(e) => setEmailPara(e.target.value)} placeholder="correo@cliente.com" />
               <p className="text-xs text-muted-foreground">Puede separar varios correos con coma</p>
             </div>
             <div className="space-y-1">
@@ -697,11 +640,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
             </div>
             <div className="space-y-1">
               <Label>Mensaje</Label>
-              <Textarea
-                value={emailMensaje}
-                onChange={(e) => setEmailMensaje(e.target.value)}
-                rows={7}
-              />
+              <Textarea value={emailMensaje} onChange={(e) => setEmailMensaje(e.target.value)} rows={7} />
             </div>
             {envioResultado && (
               <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${envioResultado.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
@@ -719,6 +658,15 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <style>{`
+        @media print {
+          body { background: white; }
+          .print\\:hidden { display: none !important; }
+          nav, header { display: none !important; }
+          main { padding: 0 !important; }
+        }
+      `}</style>
     </div>
   );
 }
