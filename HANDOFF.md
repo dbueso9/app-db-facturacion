@@ -1,7 +1,7 @@
 # HANDOFF — DB Consulting Facturación
 
 ## Estado actual (2026-04-25)
-App de facturación en producción — Fase 14 completa. Fix 413 email, soporte en dashboard, UI/UX mejorado.
+App de facturación en producción — Fase 15 completa. Layout A4 completo vía dangerouslySetInnerHTML; factura y cotización idénticas en pantalla/email/PDF.
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
@@ -502,3 +502,16 @@ git push  # Vercel despliega automáticamente a producción desde main
 | Fase 11: Rol gestion oculta botones de acción | 2026-04-24 | ✅ |
 | Build TypeScript Fase 11 — 0 errores | 2026-04-24 | ✅ |
 | Auditoría ESLint completa — 4 errores corregidos | 2026-04-24 | ✅ |
+| Fase 14: Fix 413, PDF JPEG 80% más pequeño, soporte dashboard, UI | 2026-04-25 | ✅ |
+| Fase 15: A4 full-page layout via dangerouslySetInnerHTML | 2026-04-25 | ✅ |
+| Build TypeScript Fase 15 — 0 errores | 2026-04-25 | ✅ |
+
+### ✅ Fase 15 — A4 full-page layout, logo, colores fuertes, pantalla=email=PDF (2026-04-25) — commit dee5293
+- **`factura-html.ts` + `cotizacion-html.ts` reescritos:** layout flex-column `794px × min-height:1122px`; flex:1 spacer empuja datos bancarios y totales al fondo de la página A4
+- **Header navy:** encabezado `#1e3a5f` en tabla de servicios; texto blanco en columnas
+- **Logo empresa:** `<img>` 64×64px en el header del documento (ambos templates)
+- **Colores más fuertes:** texto primario `#0f172a`, secundario `#374151`, labels `#6b7280` — eliminado el gris débil
+- **Dos funciones por template:** `generarBodyFactura`/`generarBodyCotizacion` (solo el `<div>` interno, para `dangerouslySetInnerHTML`) y `generarHtmlFactura`/`generarHtmlCotizacion` (HTML completo con fondo gris `#dde3ea`, para email/PDF)
+- **`factura-detalle-client.tsx` + `cotizacion-detalle-client.tsx`:** eliminados ~220 líneas de JSX de documento personalizado; reemplazados por `dangerouslySetInnerHTML={{ __html: generarBodyXxx(doc, "/Logo DB.png") }}` — pantalla, email y PDF son ahora 100% idénticos
+- **Fondo gris A4 en pantalla:** `bg-[#dde3ea]` con el documento centrado y con sombra, simula vista de hoja real
+- **PDF cotización:** actualizado a scale:1.5 + JPEG 82% (era scale:2 PNG)
