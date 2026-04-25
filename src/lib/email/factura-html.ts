@@ -158,7 +158,7 @@ export function generarBodyFactura(factura: Factura, logoUrl?: string): string {
 
     <!-- Totales SAR -->
     <div style="min-width:268px">
-      ${rowSAR("Sub-Total", factura.subtotal)}
+      ${rowSAR("Subtotal", factura.subtotal)}
       ${descuento > 0 ? rowSAR("Descuento", descuento, { red: true }) : rowSAR("Descuento", 0)}
       ${rowSAR("Impt. Exento", 0)}
       ${rowSAR("Impt. Gravado", gravado, { bold: true })}

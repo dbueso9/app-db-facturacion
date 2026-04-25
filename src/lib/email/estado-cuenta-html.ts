@@ -23,7 +23,7 @@ const ESTADO_COLOR: Record<string, string> = {
   anulada: "#dc2626",
 };
 
-export function generarHtmlEstadoCuenta(cliente: Cliente, facturas: Factura[], corteAl?: string): string {
+export function generarHtmlEstadoCuenta(cliente: Cliente, facturas: Factura[], corteAl?: string, logoUrl?: string): string {
   const activas = facturas.filter((f) => f.estado !== "anulada");
   const totalFacturado = activas.reduce((s, f) => s + f.total, 0);
   const totalCobrado = activas.filter((f) => f.estado === "pagada").reduce((s, f) => s + f.total, 0);
@@ -37,7 +37,7 @@ export function generarHtmlEstadoCuenta(cliente: Cliente, facturas: Factura[], c
       <tr>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px;color:#374151">${f.numero}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151">${fecha(f.fecha)}</td>
-        <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151">${f.nombreProyecto || "—"}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151;text-align:center">${f.nombreProyecto || "—"}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-size:12px;color:#111827;font-weight:600">${fmt(f.total)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:center">
           <span style="background:${ESTADO_COLOR[f.estado] || "#6b7280"}18;color:${ESTADO_COLOR[f.estado] || "#6b7280"};font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid ${ESTADO_COLOR[f.estado] || "#6b7280"}40">${ESTADO_LABEL[f.estado] || f.estado}</span>
@@ -54,10 +54,13 @@ export function generarHtmlEstadoCuenta(cliente: Cliente, facturas: Factura[], c
 
     <!-- Header -->
     <div style="padding:28px 40px;border-bottom:3px solid #1e3a5f;display:flex;justify-content:space-between;align-items:flex-start">
-      <div>
-        <p style="margin:0;font-size:22px;font-weight:800;color:#1e3a5f">${EMPRESA.nombre}</p>
-        <p style="margin:4px 0 0;font-size:12px;color:#6b7280">${EMPRESA.direccion}</p>
-        <p style="margin:2px 0 0;font-size:12px;color:#6b7280">RTN: ${EMPRESA.rtn} &nbsp;|&nbsp; ${EMPRESA.correo}</p>
+      <div style="display:flex;align-items:flex-start;gap:14px">
+        ${logoUrl ? `<img src="${logoUrl}" alt="Logo" style="width:56px;height:56px;object-fit:contain;flex-shrink:0" />` : ""}
+        <div>
+          <p style="margin:0;font-size:22px;font-weight:800;color:#1e3a5f">${EMPRESA.nombre}</p>
+          <p style="margin:4px 0 0;font-size:12px;color:#6b7280">${EMPRESA.direccion}</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#6b7280">RTN: ${EMPRESA.rtn} &nbsp;|&nbsp; ${EMPRESA.correo}</p>
+        </div>
       </div>
       <div style="text-align:right">
         <p style="margin:0;font-size:24px;font-weight:800;color:#1e3a5f">ESTADO DE CUENTA</p>
@@ -98,7 +101,7 @@ export function generarHtmlEstadoCuenta(cliente: Cliente, facturas: Factura[], c
           <tr style="border-bottom:2px solid #1e3a5f">
             <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#1e3a5f;font-weight:700">N° Factura</th>
             <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#1e3a5f;font-weight:700">Fecha</th>
-            <th style="padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;color:#1e3a5f;font-weight:700">Concepto</th>
+            <th style="padding:7px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#1e3a5f;font-weight:700">Concepto</th>
             <th style="padding:7px 10px;text-align:right;font-size:10px;text-transform:uppercase;color:#1e3a5f;font-weight:700;width:100px">Total</th>
             <th style="padding:7px 10px;text-align:center;font-size:10px;text-transform:uppercase;color:#1e3a5f;font-weight:700;width:80px">Estado</th>
           </tr>

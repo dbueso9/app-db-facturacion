@@ -44,7 +44,7 @@ type FormHito = { id: string; nombre: string; porcentaje: string };
 
 const EMPTY_CONTRATO: FormContrato = {
   nombreProyecto: "",
-  tipo: "proyecto_app",
+  tipo: "mantenimiento",
   valorBase: 0,
   fechaInicio: new Date().toISOString().split("T")[0],
   diaFacturacion: 1,
@@ -688,22 +688,18 @@ export default function ClienteDetalleClient({
                 <Select value={formContrato.tipo} onValueChange={(v) => setFormContrato({ ...formContrato, tipo: v as TipoContrato })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="mantenimiento">Mantenimiento / Soporte (17% anual)</SelectItem>
+                    <SelectItem value="mantenimiento">Mantenimiento Anual (17%)</SelectItem>
                     <SelectItem value="hosting">Hosting (mensual fijo)</SelectItem>
                     <SelectItem value="soporte">Soporte Técnico (mensual fijo)</SelectItem>
-                    <SelectItem value="proyecto_app">Proyecto / App (hitos)</SelectItem>
                     <SelectItem value="otro">Otro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>{formContrato.tipo === "mantenimiento" ? "Valor del Proyecto (base 17%)" : "Valor Total"} *</Label>
+                <Label>{formContrato.tipo === "mantenimiento" ? "Valor del Proyecto (base 17%)" : "Valor Mensual"} *</Label>
                 <Input type="number" min="0" step="0.01" value={formContrato.valorBase || ""} onChange={(e) => setFormContrato({ ...formContrato, valorBase: Number(e.target.value) })} placeholder="0.00" className="font-mono" />
                 {formContrato.tipo === "mantenimiento" && formContrato.valorBase > 0 && (
                   <p className="text-xs text-muted-foreground">Anual: <span className="font-mono font-semibold">{formatLempiras(formContrato.valorBase * 0.17)}</span></p>
-                )}
-                {formContrato.tipo === "proyecto_app" && (
-                  <p className="text-xs text-muted-foreground">Se distribuirá entre los hitos del proyecto</p>
                 )}
               </div>
             </div>
@@ -740,7 +736,7 @@ export default function ClienteDetalleClient({
 
       {/* Dialog Hitos */}
       <Dialog open={modalHitos} onOpenChange={setModalHitos}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Plan de Pagos — Hitos del Proyecto</DialogTitle>
             <DialogDescription>
@@ -749,11 +745,12 @@ export default function ClienteDetalleClient({
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
-              <span className="col-span-6">Nombre del Hito</span>
-              <span className="col-span-3 text-center">%</span>
-              <span className="col-span-2 text-right">Monto</span>
+              <span className="col-span-5">Nombre del Hito</span>
+              <span className="col-span-2 text-center">%</span>
+              <span className="col-span-4 text-right">Monto (L.)</span>
               <span className="col-span-1"></span>
             </div>
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
             {formHitos.map((h, idx) => {
               const contratoBase = contratos.find((c) => c.id === contratoHitosId)?.valorBase || 0;
               const pct = parseFloat(h.porcentaje) || 0;
@@ -764,7 +761,7 @@ export default function ClienteDetalleClient({
 
               return (
                 <div key={h.id} className={`grid grid-cols-12 gap-2 items-center ${yaFacturado ? "opacity-60" : ""}`}>
-                  <div className="col-span-6">
+                  <div className="col-span-5">
                     <Input
                       value={h.nombre}
                       onChange={(e) => updateHitoRow(idx, "nombre", e.target.value)}
@@ -773,7 +770,7 @@ export default function ClienteDetalleClient({
                       className="h-8 text-sm"
                     />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <Input
                       type="number"
                       min="0"
@@ -785,7 +782,7 @@ export default function ClienteDetalleClient({
                       className="h-8 text-sm text-center"
                     />
                   </div>
-                  <div className="col-span-2 text-right text-xs font-mono text-muted-foreground">
+                  <div className="col-span-4 text-right text-xs font-mono text-muted-foreground truncate">
                     {formatLempiras(monto)}
                   </div>
                   <div className="col-span-1 flex justify-center">
@@ -801,6 +798,7 @@ export default function ClienteDetalleClient({
               );
             })}
 
+            </div>
             <Button type="button" variant="outline" size="sm" onClick={addHitoRow} className="w-full">
               <Plus className="h-4 w-4 mr-1" />
               Agregar Hito

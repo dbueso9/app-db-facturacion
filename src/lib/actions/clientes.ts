@@ -8,7 +8,7 @@ export async function getClientes(): Promise<Cliente[]> {
   const { data, error } = await supabase
     .from("dbc_clientes")
     .select("*")
-    .order("nombre");
+    .order("codigo");
   if (error) throw error;
   return (data || []).map(row => ({
     id: row.id,

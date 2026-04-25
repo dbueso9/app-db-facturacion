@@ -34,7 +34,7 @@ export async function enviarFactura(
       : html;
 
     const { error } = await resend.emails.send({
-      from: `${EMPRESA.nombre} <onboarding@resend.dev>`,
+      from: `${EMPRESA.nombre} <facturacion@dbconsulting.hn>`,
       to: toArray(para),
       subject: asunto,
       html: cuerpo,
@@ -65,7 +65,7 @@ export async function enviarCotizacion(
       : html;
 
     const { error } = await resend.emails.send({
-      from: `${EMPRESA.nombre} <onboarding@resend.dev>`,
+      from: `${EMPRESA.nombre} <facturacion@dbconsulting.hn>`,
       to: toArray(para),
       subject: asunto,
       html: cuerpo,
@@ -105,7 +105,7 @@ export async function enviarFacturasAgrupadas(
       : secciones;
 
     const { error } = await resend.emails.send({
-      from: `${EMPRESA.nombre} <onboarding@resend.dev>`,
+      from: `${EMPRESA.nombre} <facturacion@dbconsulting.hn>`,
       to: toArray(para),
       subject: asunto,
       html: cuerpo,
@@ -134,7 +134,7 @@ export async function enviarEstadoCuenta(
       : html;
 
     const { error } = await resend.emails.send({
-      from: `${EMPRESA.nombre} <onboarding@resend.dev>`,
+      from: `${EMPRESA.nombre} <facturacion@dbconsulting.hn>`,
       to: toArray(para),
       subject: asunto,
       html: cuerpo,

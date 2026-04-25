@@ -163,7 +163,9 @@ export default function NuevaCotizacionClient({
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={(val) => { if (!val) return; field.onChange(val); onClienteChange(val); }}>
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Seleccione un cliente" />
+                      <SelectValue placeholder="Seleccione un cliente">
+                        {field.value ? (clientes.find(c => c.id === field.value)?.nombre) : undefined}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {clientes.length === 0 ? (

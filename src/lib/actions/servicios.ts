@@ -8,7 +8,7 @@ export async function getServicios(): Promise<Servicio[]> {
   const { data, error } = await supabase
     .from("dbc_servicios")
     .select("*")
-    .order("nombre");
+    .order("precio_base", { ascending: false });
   if (error) throw error;
   return (data || []).map(row => ({
     id: row.id,

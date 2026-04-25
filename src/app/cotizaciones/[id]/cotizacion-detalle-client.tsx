@@ -387,7 +387,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
 
       {/* Dialog crear contrato con hitos */}
       <Dialog open={modalContrato} onOpenChange={setModalContrato}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Crear Contrato con Plan de Pagos</DialogTitle>
             <DialogDescription>
@@ -401,7 +401,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label>Valor del Proyecto</Label>
+                <Label>Valor del Proyecto (L.)</Label>
                 <div className="flex items-center h-9 px-3 border rounded-md bg-muted/50 text-sm font-mono text-muted-foreground">
                   {new Intl.NumberFormat("es-HN", { style: "currency", currency: "HNL", minimumFractionDigits: 2 }).format(valorBaseContrato)}
                 </div>
@@ -412,35 +412,39 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
               </div>
             </div>
             <Separator />
-            <p className="text-sm font-medium">Plan de Pagos (Hitos)</p>
+            <p className="text-sm font-medium">Plan de Pagos — Hitos</p>
+            {/* Cabecera de hitos */}
             <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground px-1">
-              <span className="col-span-6">Nombre del Hito</span>
-              <span className="col-span-3 text-center">%</span>
-              <span className="col-span-2 text-right">Monto</span>
+              <span className="col-span-5">Nombre del Hito</span>
+              <span className="col-span-2 text-center">%</span>
+              <span className="col-span-4 text-right">Monto (L.)</span>
               <span className="col-span-1"></span>
             </div>
-            {formHitosContrato.map((h, idx) => {
-              const pct = parseFloat(h.porcentaje) || 0;
-              const monto = (valorBaseContrato * pct) / 100;
-              return (
-                <div key={h.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-6">
-                    <Input value={h.nombre} onChange={(e) => updateHitoContratoRow(idx, "nombre", e.target.value)} placeholder="Ej: Anticipo..." className="h-8 text-sm" />
+            {/* Lista de hitos con scroll cuando hay muchos */}
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {formHitosContrato.map((h, idx) => {
+                const pct = parseFloat(h.porcentaje) || 0;
+                const monto = (valorBaseContrato * pct) / 100;
+                return (
+                  <div key={h.id} className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-5">
+                      <Input value={h.nombre} onChange={(e) => updateHitoContratoRow(idx, "nombre", e.target.value)} placeholder="Ej: Anticipo..." className="h-8 text-sm" />
+                    </div>
+                    <div className="col-span-2">
+                      <Input type="number" min="0" max="100" step="0.01" value={h.porcentaje} onChange={(e) => updateHitoContratoRow(idx, "porcentaje", e.target.value)} className="h-8 text-sm text-center" />
+                    </div>
+                    <div className="col-span-4 text-right text-xs font-mono text-muted-foreground truncate">
+                      {new Intl.NumberFormat("es-HN", { style: "currency", currency: "HNL", minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(monto)}
+                    </div>
+                    <div className="col-span-1 flex justify-center">
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeHitoContratoRow(idx)}>
+                        <XCircle className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="col-span-3">
-                    <Input type="number" min="0" max="100" step="0.01" value={h.porcentaje} onChange={(e) => updateHitoContratoRow(idx, "porcentaje", e.target.value)} className="h-8 text-sm text-center" />
-                  </div>
-                  <div className="col-span-2 text-right text-xs font-mono text-muted-foreground">
-                    {new Intl.NumberFormat("es-HN", { style: "currency", currency: "HNL", minimumFractionDigits: 0 }).format(monto)}
-                  </div>
-                  <div className="col-span-1 flex justify-center">
-                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeHitoContratoRow(idx)}>
-                      <XCircle className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
             <Button type="button" variant="outline" size="sm" onClick={addHitoContratoRow} className="w-full">
               <Plus className="h-4 w-4 mr-1" />Agregar Hito
             </Button>

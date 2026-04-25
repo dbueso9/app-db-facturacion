@@ -202,7 +202,9 @@ export default function EditarClient({ factura, clientes, servicios, tasaCambio 
                     onValueChange={(v) => { field.onChange(v); onClienteChange(v); }}
                   >
                     <SelectTrigger className={`w-full ${errors.clienteId ? "border-red-500" : ""}`}>
-                      <SelectValue placeholder="Seleccione un cliente" />
+                      <SelectValue placeholder="Seleccione un cliente">
+                        {field.value ? (clientes.find(c => c.id === field.value)?.nombre) : undefined}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {clientes.map((c) => (

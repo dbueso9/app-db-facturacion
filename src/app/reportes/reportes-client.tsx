@@ -147,7 +147,8 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
       try {
         const { generarHtmlEstadoCuenta } = await import("@/lib/email/estado-cuenta-html");
         const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
-        pdfBase64 = await pdfBase64FromHtml(generarHtmlEstadoCuenta(clienteEstado, facturasEstado));
+        const logoUrl = `${window.location.origin}/Logo%20DB.png`;
+        pdfBase64 = await pdfBase64FromHtml(generarHtmlEstadoCuenta(clienteEstado, facturasEstado, undefined, logoUrl));
       } catch { /* sin adjunto */ }
       const res = await enviarEstadoCuenta(clienteEstado, facturasEstado, emailParaEstado.trim(), emailAsuntoEstado, emailMensajeEstado, pdfBase64);
       setResultadoEstado({ ok: res.ok, msg: res.ok ? (pdfBase64 ? "Correo enviado con PDF adjunto" : "Correo enviado") : res.error || "Error al enviar" });
@@ -170,7 +171,8 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
       iframe = document.createElement("iframe");
       iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;height:1200px;border:none;";
       document.body.appendChild(iframe);
-      await new Promise<void>((resolve) => { iframe!.onload = () => resolve(); iframe!.srcdoc = generarHtmlEstadoCuenta(clienteEstado, facturasEstado); setTimeout(resolve, 1500); });
+      const logoUrlPdf = `${window.location.origin}/Logo%20DB.png`;
+      await new Promise<void>((resolve) => { iframe!.onload = () => resolve(); iframe!.srcdoc = generarHtmlEstadoCuenta(clienteEstado, facturasEstado, undefined, logoUrlPdf); setTimeout(resolve, 1500); });
       const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
       if (!iframeDoc) throw new Error("No se pudo acceder al documento");
       const canvas = await html2canvas(iframeDoc.body, { scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false, windowWidth: 794 });

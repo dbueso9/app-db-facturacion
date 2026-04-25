@@ -128,7 +128,7 @@ export function generarBodyCotizacion(cotizacion: Cotizacion, logoUrl?: string):
   <!-- TOTALES -->
   <div style="padding:16px 36px 20px;display:flex;justify-content:flex-end;border-top:2px solid #e2e8f0">
     <div style="min-width:268px">
-      ${rowUSD("Sub-Total", cotizacion.subtotal)}
+      ${rowUSD("Subtotal", cotizacion.subtotal)}
       ${descuento > 0 ? rowUSD("Descuento", descuento, { red: true }) : ""}
       ${descuento > 0 ? rowUSD("Importe Gravado", gravado, { bold: true }) : ""}
       ${rowUSD("ISV (15%)", isv, { bold: true })}
