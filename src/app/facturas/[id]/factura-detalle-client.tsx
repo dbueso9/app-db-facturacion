@@ -15,14 +15,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { updateEstadoFactura, deleteFactura } from "@/lib/actions/facturas";
+import { saveContrato } from "@/lib/actions/contratos";
 import { enviarFactura } from "@/lib/actions/email";
-import { Factura, EstadoFactura } from "@/lib/types";
-import { formatLempiras, formatFecha } from "@/lib/utils";
+import { Factura, EstadoFactura, TipoContrato } from "@/lib/types";
+import { formatLempiras, formatFecha, generarId } from "@/lib/utils";
 import { EMPRESA } from "@/lib/empresa";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Printer, Trash2, Download, Pencil, Send, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, Printer, Trash2, Download, Pencil, Send, CheckCircle, XCircle, Layers } from "lucide-react";
 import Link from "next/link";
 import { jsPDF } from "jspdf";
 
@@ -43,13 +44,60 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
   const [exportandoPdf, setExportandoPdf] = useState(false);
   const [errorPdf, setErrorPdf] = useState<string | null>(null);
   const [modalEmail, setModalEmail] = useState(false);
-  const [emailPara, setEmailPara] = useState(factura.cliente.correo || "");
+  const correosCliente = [factura.cliente.correo, factura.cliente.correo2, factura.cliente.correo3].filter(Boolean).join(", ");
+  const [emailPara, setEmailPara] = useState(correosCliente || "");
   const [emailAsunto, setEmailAsunto] = useState(
     `Factura ${factura.numero}${factura.nombreProyecto ? ` — ${factura.nombreProyecto}` : ""}`
   );
-  const [emailMensaje, setEmailMensaje] = useState("");
+  const [emailMensaje, setEmailMensaje] = useState(
+    `Estimado(a) ${factura.cliente.nombre},\n\nAdjunto encontrará la factura ${factura.numero}${factura.nombreProyecto ? ` correspondiente a ${factura.nombreProyecto}` : ""} por un valor de ${formatLempiras(factura.total)}.\n\nFecha límite de pago: ${formatFecha(factura.fechaVencimiento)}.\n\nDatos bancarios para transferencia:\nBanco: ${EMPRESA.banco.nombre}\nCuenta: #${EMPRESA.banco.cuenta}\nTipo: ${EMPRESA.banco.tipo}\n\nPara cualquier consulta, no dude en contactarnos.\n\nAtentamente,\n${EMPRESA.nombre}`
+  );
   const [enviando, setEnviando] = useState(false);
   const [envioResultado, setEnvioResultado] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Crear contrato de servicio recurrente desde factura
+  const [modalContrato, setModalContrato] = useState(false);
+  const [formContrato, setFormContrato] = useState({
+    nombreProyecto: factura.nombreProyecto || "",
+    tipo: "mantenimiento" as TipoContrato,
+    diaFacturacion: 1 as 1 | 2,
+    notas: factura.notas || "",
+  });
+  const [creandoContrato, setCreandoContrato] = useState(false);
+  const [errorContrato, setErrorContrato] = useState<string | null>(null);
+
+  const TIPO_LABELS: Record<TipoContrato, string> = {
+    mantenimiento: "Mantenimiento / Soporte",
+    hosting: "Hosting",
+    soporte: "Soporte Técnico",
+    proyecto_app: "Proyecto / App",
+    otro: "Otro",
+  };
+
+  async function crearContratoDesdeFactura() {
+    if (!formContrato.nombreProyecto.trim()) { setErrorContrato("El nombre del proyecto es requerido"); return; }
+    setCreandoContrato(true);
+    setErrorContrato(null);
+    try {
+      await saveContrato({
+        id: generarId(),
+        clienteId: factura.clienteId,
+        nombreProyecto: formContrato.nombreProyecto.trim(),
+        tipo: formContrato.tipo,
+        valorBase: factura.total,
+        fechaInicio: factura.fecha,
+        diaFacturacion: formContrato.diaFacturacion,
+        activo: true,
+        notas: formContrato.notas,
+        creadoEn: new Date().toISOString(),
+      });
+      setModalContrato(false);
+      router.push(`/clientes/${factura.clienteId}`);
+    } catch (e) {
+      setErrorContrato((e as Error).message || "Error al crear el contrato");
+      setCreandoContrato(false);
+    }
+  }
 
   const estado = BADGE_ESTADO[estadoActual];
 
@@ -58,12 +106,24 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
     setEnviando(true);
     setEnvioResultado(null);
     try {
-      const { generarHtmlFactura } = await import("@/lib/email/factura-html");
-      const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
-      const pdfBase64 = await pdfBase64FromHtml(generarHtmlFactura(factura));
+      let pdfBase64: string | undefined;
+      try {
+        const { generarHtmlFactura } = await import("@/lib/email/factura-html");
+        const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
+        pdfBase64 = await pdfBase64FromHtml(generarHtmlFactura(factura));
+      } catch {
+        // PDF falló; se envía sin adjunto
+      }
       const res = await enviarFactura(factura, emailPara.trim(), emailAsunto, emailMensaje, pdfBase64);
-      setEnvioResultado({ ok: res.ok, msg: res.ok ? "Correo enviado con PDF adjunto" : res.error || "Error al enviar" });
+      setEnvioResultado({
+        ok: res.ok,
+        msg: res.ok
+          ? (pdfBase64 ? "Correo enviado con PDF adjunto" : "Correo enviado (sin PDF adjunto)")
+          : res.error || "Error al enviar",
+      });
       if (res.ok) setTimeout(() => setModalEmail(false), 2000);
+    } catch (e) {
+      setEnvioResultado({ ok: false, msg: (e as Error).message || "Error al enviar correo" });
     } finally {
       setEnviando(false);
     }
@@ -113,7 +173,7 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
       await new Promise<void>((resolve) => {
         iframe!.onload = () => resolve();
         iframe!.srcdoc = generarHtmlFactura(factura);
-        setTimeout(resolve, 700);
+        setTimeout(resolve, 1500);
       });
 
       const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
@@ -174,6 +234,10 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
           <Button variant="outline" size="sm" onClick={() => setModalEmail(true)}>
             <Send className="h-4 w-4 mr-1" />
             Enviar Correo
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { setModalContrato(true); setErrorContrato(null); }}>
+            <Layers className="h-4 w-4 mr-1" />
+            Crear Contrato
           </Button>
           <Button variant="outline" size="sm" onClick={exportarPDF} disabled={exportandoPdf}>
             <Download className="h-4 w-4 mr-1" />
@@ -334,21 +398,48 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
                 <td className="py-2 px-2 text-right font-mono font-medium">{formatLempiras(l.subtotal)}</td>
               </tr>
             ))}
+            <tr className="border-b border-gray-100">
+              <td colSpan={4} className="py-1.5 px-2 text-center text-xs text-gray-400 italic tracking-wide">— Ultima Fila —</td>
+            </tr>
           </tbody>
         </table>
 
-        {/* Totales */}
-        <div className="flex justify-end mb-6">
+        {/* Totales + Banco */}
+        <div className="flex justify-between items-start mb-6 gap-4 flex-wrap">
+          {/* Datos bancarios */}
+          <div className="border border-gray-200 rounded-lg p-3 text-xs min-w-48">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1.5">Datos Bancarios</p>
+            <p className="font-bold text-gray-800">{EMPRESA.banco.nombre}</p>
+            <p className="text-gray-600 mt-0.5">Cuenta # {EMPRESA.banco.cuenta}</p>
+            <p className="text-gray-600">Tipo: {EMPRESA.banco.tipo}</p>
+          </div>
+          {/* Totales SAR */}
           <div className="w-72 text-sm border border-gray-200 rounded-lg overflow-hidden">
-            <div className="flex justify-between px-4 py-2 bg-gray-50">
-              <span className="text-gray-600">Subtotal sin ISV</span>
+            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+              <span className="text-gray-600">Sub-Total</span>
               <span className="font-mono">{formatLempiras(factura.subtotal)}</span>
             </div>
-            <div className="flex justify-between px-4 py-2">
-              <span className="text-gray-600">ISV (15%)</span>
+            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+              <span className="text-gray-600">Descuento</span>
+              <span className="font-mono">{formatLempiras(0)}</span>
+            </div>
+            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+              <span className="text-gray-600">Impt. Exento</span>
+              <span className="font-mono">{formatLempiras(0)}</span>
+            </div>
+            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+              <span className="text-gray-600">Impt. Gravado</span>
+              <span className="font-mono">{formatLempiras(factura.subtotal)}</span>
+            </div>
+            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+              <span className="text-gray-600">Impt. Exonerado</span>
+              <span className="font-mono">{formatLempiras(0)}</span>
+            </div>
+            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
+              <span className="text-gray-600">Impuesto 15%</span>
               <span className="font-mono">{formatLempiras(factura.isv)}</span>
             </div>
-            <div className="flex justify-between px-4 py-3 bg-gray-900 text-white font-bold text-base">
+            <div className="flex justify-between px-4 py-3 bg-[#1e3a5f] text-white font-bold text-base">
               <span>Total a Pagar</span>
               <span className="font-mono">{formatLempiras(factura.total)}</span>
             </div>
@@ -422,12 +513,11 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
               <Input value={emailAsunto} onChange={(e) => setEmailAsunto(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Mensaje (opcional)</Label>
+              <Label>Mensaje</Label>
               <Textarea
                 value={emailMensaje}
                 onChange={(e) => setEmailMensaje(e.target.value)}
-                placeholder="Estimado cliente, adjunto encontrará su factura..."
-                rows={3}
+                rows={7}
               />
             </div>
             {envioResultado && (
@@ -487,6 +577,73 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
             <Button variant="outline" onClick={() => setConfirmandoEliminar(false)}>Cancelar</Button>
             <Button variant="destructive" onClick={confirmarEliminar} disabled={eliminando}>
               {eliminando ? "Eliminando..." : "Eliminar permanentemente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog crear contrato de servicio */}
+      <Dialog open={modalContrato} onOpenChange={setModalContrato}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crear Contrato de Servicio</DialogTitle>
+            <DialogDescription>
+              Se creará un contrato recurrente para {factura.cliente.nombre} basado en esta factura (valor base: {formatLempiras(factura.total)}).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Nombre del Servicio / Proyecto *</Label>
+              <Input
+                value={formContrato.nombreProyecto}
+                onChange={(e) => setFormContrato({ ...formContrato, nombreProyecto: e.target.value })}
+                placeholder="Ej: Mantenimiento Mensual, Hosting Web..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Tipo de Contrato</Label>
+                <Select value={formContrato.tipo} onValueChange={(v) => v && setFormContrato({ ...formContrato, tipo: v as TipoContrato })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.entries(TIPO_LABELS) as [TipoContrato, string][]).map(([val, lbl]) => (
+                      <SelectItem key={val} value={val}>{lbl}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Día de Facturación</Label>
+                <Select value={String(formContrato.diaFacturacion)} onValueChange={(v) => v && setFormContrato({ ...formContrato, diaFacturacion: Number(v) as 1 | 2 })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Inicio de mes</SelectItem>
+                    <SelectItem value="2">Fin de mes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Notas</Label>
+              <Textarea
+                value={formContrato.notas}
+                onChange={(e) => setFormContrato({ ...formContrato, notas: e.target.value })}
+                rows={2}
+                placeholder="Notas adicionales del contrato"
+              />
+            </div>
+            {errorContrato && (
+              <div className="flex items-center gap-2 text-sm text-red-400 bg-red-950/30 border border-red-800 rounded px-3 py-2">
+                <XCircle className="h-4 w-4 shrink-0" />
+                {errorContrato}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalContrato(false)}>Cancelar</Button>
+            <Button onClick={crearContratoDesdeFactura} disabled={creandoContrato || !formContrato.nombreProyecto.trim()}>
+              <Layers className="h-4 w-4 mr-1" />
+              {creandoContrato ? "Creando..." : "Crear Contrato"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -59,11 +59,14 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
   const [exportandoPdf, setExportandoPdf] = useState(false);
   const [errorPdf, setErrorPdf] = useState<string | null>(null);
   const [modalEmail, setModalEmail] = useState(false);
-  const [emailPara, setEmailPara] = useState(cotizacion.cliente.correo || "");
+  const correosCliente = [cotizacion.cliente.correo, cotizacion.cliente.correo2, cotizacion.cliente.correo3].filter(Boolean).join(", ");
+  const [emailPara, setEmailPara] = useState(correosCliente || "");
   const [emailAsunto, setEmailAsunto] = useState(
     `Cotización ${cotizacion.numero}${cotizacion.nombreProyecto ? ` — ${cotizacion.nombreProyecto}` : ""}`
   );
-  const [emailMensaje, setEmailMensaje] = useState("");
+  const [emailMensaje, setEmailMensaje] = useState(
+    `Estimado(a) ${cotizacion.cliente.nombre},\n\nAdjunto encontrará la cotización ${cotizacion.numero}${cotizacion.nombreProyecto ? ` para ${cotizacion.nombreProyecto}` : ""} por un valor de ${formatDolares(cotizacion.total)}.\n\nEsta cotización tiene vigencia hasta el ${formatFecha(cotizacion.fechaValidez)}.\n\nPara cualquier consulta o aprobación, no dude en contactarnos.\n\nAtentamente,\n${EMPRESA.nombre}`
+  );
   const [enviando, setEnviando] = useState(false);
   const [envioResultado, setEnvioResultado] = useState<{ ok: boolean; msg: string } | null>(null);
 
@@ -166,7 +169,7 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
       await new Promise<void>((resolve) => {
         iframe!.onload = () => resolve();
         iframe!.srcdoc = generarHtmlCotizacion(cotizacion);
-        setTimeout(resolve, 700);
+        setTimeout(resolve, 1500);
       });
 
       const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
@@ -274,12 +277,24 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
     setEnviando(true);
     setEnvioResultado(null);
     try {
-      const { generarHtmlCotizacion } = await import("@/lib/email/cotizacion-html");
-      const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
-      const pdfBase64 = await pdfBase64FromHtml(generarHtmlCotizacion(cotizacion));
+      let pdfBase64: string | undefined;
+      try {
+        const { generarHtmlCotizacion } = await import("@/lib/email/cotizacion-html");
+        const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
+        pdfBase64 = await pdfBase64FromHtml(generarHtmlCotizacion(cotizacion));
+      } catch {
+        // PDF falló; se envía sin adjunto
+      }
       const res = await enviarCotizacion(cotizacion, emailPara.trim(), emailAsunto, emailMensaje, pdfBase64);
-      setEnvioResultado({ ok: res.ok, msg: res.ok ? "Correo enviado con PDF adjunto" : res.error || "Error al enviar" });
+      setEnvioResultado({
+        ok: res.ok,
+        msg: res.ok
+          ? (pdfBase64 ? "Correo enviado con PDF adjunto" : "Correo enviado (sin PDF adjunto)")
+          : res.error || "Error al enviar",
+      });
       if (res.ok) setTimeout(() => setModalEmail(false), 2000);
+    } catch (e) {
+      setEnvioResultado({ ok: false, msg: (e as Error).message || "Error al enviar correo" });
     } finally {
       setEnviando(false);
     }
@@ -450,6 +465,9 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
                 <span className="col-span-2 text-right font-mono font-semibold">{formatDolares(l.subtotal)}</span>
               </div>
             ))}
+            <div className="py-1.5 border-b border-muted text-xs text-muted-foreground text-center italic tracking-wide">
+              — Ultima Fila —
+            </div>
           </div>
 
           <div className="flex flex-col items-end gap-1 text-sm">
@@ -484,8 +502,11 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           )}
 
           <Separator />
-          <div className="text-xs text-center font-bold border border-foreground/30 rounded px-3 py-2 bg-muted/30 uppercase tracking-wide">
-            ESTA COTIZACIÓN ES VÁLIDA HASTA EL {formatValidezDestacado(cotizacion.fechaValidez)}
+          <div className="space-y-2">
+            <div className="text-xs text-center font-bold border border-foreground/30 rounded px-3 py-2 bg-muted/30 uppercase tracking-wide">
+              ESTA COTIZACIÓN ES VÁLIDA HASTA EL {formatValidezDestacado(cotizacion.fechaValidez)}
+            </div>
+            <p className="text-xs text-center text-muted-foreground italic">Los precios están sujetos a cambio.</p>
           </div>
         </CardContent>
       </Card>
@@ -675,12 +696,11 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
               <Input value={emailAsunto} onChange={(e) => setEmailAsunto(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Mensaje (opcional)</Label>
+              <Label>Mensaje</Label>
               <Textarea
                 value={emailMensaje}
                 onChange={(e) => setEmailMensaje(e.target.value)}
-                placeholder="Estimado cliente, adjunto encontrará su cotización..."
-                rows={3}
+                rows={7}
               />
             </div>
             {envioResultado && (

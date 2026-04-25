@@ -18,7 +18,7 @@ import { Plus, Pencil, Trash2, Users, ChevronRight } from "lucide-react";
 type FormData = Omit<Cliente, "id" | "creadoEn">;
 type FormErrors = Partial<Record<keyof FormData, string>>;
 
-const EMPTY: FormData = { codigo: "", nombre: "", rtn: "", direccion: "", correo: "", telefono: "" };
+const EMPTY: FormData = { codigo: "", nombre: "", rtn: "", direccion: "", correo: "", correo2: "", correo3: "", telefono: "" };
 
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
@@ -42,7 +42,7 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
   function abrir(cliente?: Cliente) {
     if (cliente) {
       setEditandoId(cliente.id);
-      setForm({ codigo: cliente.codigo, nombre: cliente.nombre, rtn: cliente.rtn, direccion: cliente.direccion, correo: cliente.correo, telefono: cliente.telefono });
+      setForm({ codigo: cliente.codigo, nombre: cliente.nombre, rtn: cliente.rtn, direccion: cliente.direccion, correo: cliente.correo, correo2: cliente.correo2 || "", correo3: cliente.correo3 || "", telefono: cliente.telefono });
     } else {
       setEditandoId(null);
       setForm(EMPTY);
@@ -88,7 +88,13 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
 
     setGuardando(true);
     try {
-      const cliente: Cliente = { id: editandoId || generarId(), creadoEn: new Date().toISOString(), ...form };
+      const cliente: Cliente = {
+        id: editandoId || generarId(),
+        creadoEn: new Date().toISOString(),
+        ...form,
+        correo2: form.correo2?.trim() || undefined,
+        correo3: form.correo3?.trim() || undefined,
+      };
       await saveCliente(cliente);
       setClientes(prev => {
         const exists = prev.find(c => c.id === cliente.id);
@@ -227,29 +233,47 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
               />
               <FieldError msg={formErrors.direccion} />
             </div>
+            <div className="space-y-1">
+              <Label>Correo *</Label>
+              <Input
+                type="email"
+                value={form.correo}
+                onChange={(e) => { setForm({ ...form, correo: e.target.value }); if (formErrors.correo) setFormErrors({ ...formErrors, correo: undefined }); }}
+                placeholder="correo@ejemplo.com"
+                className={formErrors.correo ? "border-red-500" : ""}
+              />
+              <FieldError msg={formErrors.correo} />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label>Correo *</Label>
+                <Label>Correo 2 <span className="text-muted-foreground text-xs font-normal">(opcional)</span></Label>
                 <Input
                   type="email"
-                  value={form.correo}
-                  onChange={(e) => { setForm({ ...form, correo: e.target.value }); if (formErrors.correo) setFormErrors({ ...formErrors, correo: undefined }); }}
-                  placeholder="correo@ejemplo.com"
-                  className={formErrors.correo ? "border-red-500" : ""}
+                  value={form.correo2 || ""}
+                  onChange={(e) => setForm({ ...form, correo2: e.target.value })}
+                  placeholder="correo2@ejemplo.com"
                 />
-                <FieldError msg={formErrors.correo} />
               </div>
               <div className="space-y-1">
-                <Label>Teléfono *</Label>
+                <Label>Correo 3 <span className="text-muted-foreground text-xs font-normal">(opcional)</span></Label>
                 <Input
-                  value={form.telefono}
-                  onChange={(e) => handleTelefono(e.target.value)}
-                  placeholder="+504 XXXX-XXXX"
-                  inputMode="tel"
-                  className={formErrors.telefono ? "border-red-500" : ""}
+                  type="email"
+                  value={form.correo3 || ""}
+                  onChange={(e) => setForm({ ...form, correo3: e.target.value })}
+                  placeholder="correo3@ejemplo.com"
                 />
-                <FieldError msg={formErrors.telefono} />
               </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Teléfono *</Label>
+              <Input
+                value={form.telefono}
+                onChange={(e) => handleTelefono(e.target.value)}
+                placeholder="+504 XXXX-XXXX"
+                inputMode="tel"
+                className={formErrors.telefono ? "border-red-500" : ""}
+              />
+              <FieldError msg={formErrors.telefono} />
             </div>
           </div>
           <DialogFooter>

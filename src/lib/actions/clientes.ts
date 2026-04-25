@@ -17,6 +17,8 @@ export async function getClientes(): Promise<Cliente[]> {
     rtn: row.rtn || "",
     direccion: row.direccion || "",
     correo: row.correo || "",
+    correo2: row.correo2 || undefined,
+    correo3: row.correo3 || undefined,
     telefono: row.telefono || "",
     creadoEn: row.creado_en,
   }));
@@ -33,6 +35,8 @@ export async function getCliente(id: string): Promise<Cliente | null> {
     rtn: data.rtn || "",
     direccion: data.direccion || "",
     correo: data.correo || "",
+    correo2: data.correo2 || undefined,
+    correo3: data.correo3 || undefined,
     telefono: data.telefono || "",
     creadoEn: data.creado_en,
   };
@@ -55,6 +59,8 @@ export async function saveCliente(cliente: Cliente): Promise<void> {
     rtn: cliente.rtn,
     direccion: cliente.direccion,
     correo: cliente.correo,
+    correo2: cliente.correo2 || null,
+    correo3: cliente.correo3 || null,
     telefono: cliente.telefono,
     creado_en: cliente.creadoEn,
   });

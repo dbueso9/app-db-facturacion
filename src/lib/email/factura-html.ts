@@ -20,125 +20,141 @@ export function generarHtmlFactura(factura: Factura): string {
     .map(
       (l) => `
       <tr>
-        <td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#374151">${l.descripcion}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;text-align:center;color:#6b7280">${l.cantidad}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:monospace;color:#374151">${fmt(l.precioUnitario)}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #f1f5f9;text-align:right;font-family:monospace;font-weight:600;color:#111827">${fmt(l.subtotal)}</td>
+        <td style="padding:9px 12px;border-bottom:1px solid #e5e7eb;color:#374151;font-size:13px">${l.descripcion}</td>
+        <td style="padding:9px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#6b7280;font-size:13px">${l.cantidad}</td>
+        <td style="padding:9px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;color:#374151;font-size:13px">${fmt(l.precioUnitario)}</td>
+        <td style="padding:9px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-family:monospace;font-weight:600;color:#111827;font-size:13px">${fmt(l.subtotal)}</td>
       </tr>`
     )
     .join("");
 
+  const ultimaFila = `
+      <tr>
+        <td colspan="4" style="padding:7px 12px;border-bottom:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:11px;font-style:italic;letter-spacing:.5px">— Ultima Fila —</td>
+      </tr>`;
+
+  // SAR totals
+  const gravado = factura.subtotal;
+  const row = (label: string, val: number, bold?: boolean) => `
+    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+      <span style="color:${bold ? "#111827" : "#6b7280"};font-weight:${bold ? "700" : "400"}">${label}</span>
+      <span style="font-family:monospace;font-weight:${bold ? "700" : "400"};color:${bold ? "#111827" : "#374151"}">${fmt(val)}</span>
+    </div>`;
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Factura ${factura.numero}</title></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,sans-serif;color:#111827">
-  <div style="max-width:680px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 8px rgba(0,0,0,.08)">
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif;color:#111827">
+  <div style="max-width:700px;margin:28px auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
 
-    <!-- Header -->
-    <div style="background:#111827;padding:32px 40px;display:flex;justify-content:space-between;align-items:flex-start">
+    <!-- Header limpio -->
+    <div style="padding:28px 40px;border-bottom:3px solid #1e3a5f;display:flex;justify-content:space-between;align-items:flex-start">
       <div>
-        <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700">${EMPRESA.nombre}</h1>
-        <p style="margin:4px 0 0;color:#9ca3af;font-size:13px">${EMPRESA.direccion}</p>
-        <p style="margin:2px 0 0;color:#9ca3af;font-size:13px">Tel: ${EMPRESA.telefono}</p>
-        <p style="margin:2px 0 0;color:#9ca3af;font-size:13px">${EMPRESA.correo}</p>
+        <p style="margin:0;font-size:22px;font-weight:800;color:#1e3a5f;letter-spacing:.5px">${EMPRESA.nombre}</p>
+        <p style="margin:4px 0 0;font-size:12px;color:#6b7280">${EMPRESA.direccion}</p>
+        <p style="margin:2px 0 0;font-size:12px;color:#6b7280">Tel: ${EMPRESA.telefono} &nbsp;|&nbsp; ${EMPRESA.correo}</p>
+        <p style="margin:2px 0 0;font-size:12px;color:#6b7280">RTN: <strong style="color:#374151">${EMPRESA.rtn}</strong></p>
       </div>
       <div style="text-align:right">
-        <p style="margin:0;color:#fff;font-size:26px;font-weight:700;letter-spacing:1px">FACTURA</p>
-        <p style="margin:4px 0 0;color:#9ca3af;font-family:monospace;font-size:13px">${factura.numero}</p>
-        ${factura.nombreProyecto ? `<p style="margin:4px 0 0;color:#d1d5db;font-size:13px;font-weight:600">${factura.nombreProyecto}</p>` : ""}
+        <p style="margin:0;font-size:28px;font-weight:800;color:#1e3a5f;letter-spacing:1px">FACTURA</p>
+        <p style="margin:4px 0 0;font-family:monospace;font-size:13px;color:#374151;font-weight:600">${factura.numero}</p>
+        ${factura.nombreProyecto ? `<p style="margin:4px 0 0;font-size:13px;color:#6b7280">${factura.nombreProyecto}</p>` : ""}
       </div>
     </div>
 
-    <!-- Datos fiscales empresa -->
-    <div style="background:#f0f0f0;padding:10px 40px;border-bottom:2px solid #111827;font-size:11px;color:#111827">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 32px">
-        <div><strong>RTN:</strong> <span style="font-family:monospace;font-weight:700">${EMPRESA.rtn}</span></div>
+    <!-- Datos fiscales SAR -->
+    <div style="padding:10px 40px;background:#f8f9fb;border-bottom:1px solid #e5e7eb;font-size:11px;color:#374151">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 32px">
+        <div><strong>CAI:</strong> <span style="font-family:monospace">${EMPRESA.cai}</span></div>
         <div><strong>Fecha Límite Emisión:</strong> ${EMPRESA.fechaLimiteEmision}</div>
-        <div style="grid-column:1/-1"><strong>CAI:</strong> <span style="font-family:monospace">${EMPRESA.cai}</span></div>
         <div><strong>Rango Desde:</strong> <span style="font-family:monospace">N.${EMPRESA.rangoDesde}</span></div>
         <div><strong>Rango Hasta:</strong> <span style="font-family:monospace">N.${EMPRESA.rangoHasta}</span></div>
       </div>
     </div>
 
-    <!-- Fechas -->
-    <div style="background:#f8fafc;padding:16px 40px;display:flex;gap:48px;border-bottom:1px solid #e5e7eb">
+    <!-- Fechas + Cliente -->
+    <div style="padding:20px 40px;display:grid;grid-template-columns:1fr 1fr;gap:20px;border-bottom:1px solid #e5e7eb">
       <div>
-        <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;font-weight:600">Fecha de Emisión</p>
-        <p style="margin:2px 0 0;font-weight:600;font-size:14px">${fecha(factura.fecha)}</p>
+        <p style="margin:0 0 10px;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;font-weight:600">Facturar a</p>
+        <p style="margin:0;font-weight:700;font-size:15px;color:#111827">${factura.cliente.nombre}</p>
+        <p style="margin:2px 0 0;font-family:monospace;font-size:13px;color:#374151">RTN: ${factura.cliente.rtn || "—"}</p>
+        ${factura.cliente.direccion ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280">${factura.cliente.direccion}</p>` : ""}
+        ${factura.cliente.correo ? `<p style="margin:2px 0 0;font-size:12px;color:#6b7280">${factura.cliente.correo}</p>` : ""}
       </div>
-      <div>
-        <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;font-weight:600">Vencimiento</p>
-        <p style="margin:2px 0 0;font-weight:600;font-size:14px">${fecha(factura.fechaVencimiento)}</p>
-      </div>
-      ${factura.metodoPago ? `<div>
-        <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;font-weight:600">Método de Pago</p>
-        <p style="margin:2px 0 0;font-weight:600;font-size:14px">${METODO_LABEL[factura.metodoPago] || factura.metodoPago}</p>
-      </div>` : ""}
-    </div>
-
-    <!-- Datos del cliente -->
-    <div style="padding:24px 40px;border-bottom:1px solid #e5e7eb">
-      <p style="margin:0 0 8px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;font-weight:600">Facturar a</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <div>
-          <p style="margin:0;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px">Nombre / Razón Social</p>
-          <p style="margin:2px 0 0;font-weight:700;font-size:15px">${factura.cliente.nombre}</p>
+      <div style="text-align:right">
+        <div style="margin-bottom:8px">
+          <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;font-weight:600">Fecha de Emisión</p>
+          <p style="margin:2px 0 0;font-weight:600;font-size:13px">${fecha(factura.fecha)}</p>
         </div>
-        <div>
-          <p style="margin:0;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px">RTN</p>
-          <p style="margin:2px 0 0;font-weight:700;font-size:15px;font-family:monospace">${factura.cliente.rtn || '<span style="color:#9ca3af;font-style:italic">Sin RTN</span>'}</p>
+        <div style="margin-bottom:8px">
+          <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;font-weight:600">Vencimiento</p>
+          <p style="margin:2px 0 0;font-weight:600;font-size:13px">${fecha(factura.fechaVencimiento)}</p>
         </div>
-        ${factura.cliente.direccion ? `<div style="grid-column:1/-1">
-          <p style="margin:0;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px">Dirección</p>
-          <p style="margin:2px 0 0;font-size:14px">${factura.cliente.direccion}</p>
+        ${factura.metodoPago ? `<div>
+          <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;font-weight:600">Método de Pago</p>
+          <p style="margin:2px 0 0;font-weight:600;font-size:13px">${METODO_LABEL[factura.metodoPago] || factura.metodoPago}</p>
         </div>` : ""}
       </div>
     </div>
 
     <!-- Tabla de servicios -->
-    <div style="padding:24px 40px">
-      <table style="width:100%;border-collapse:collapse;font-size:14px">
+    <div style="padding:24px 40px 0">
+      <table style="width:100%;border-collapse:collapse">
         <thead>
-          <tr style="background:#f1f5f9">
-            <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#374151;font-weight:600">Descripción</th>
-            <th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#374151;font-weight:600;width:60px">Cant.</th>
-            <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#374151;font-weight:600;width:140px">Precio Unit.</th>
-            <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#374151;font-weight:600;width:140px">Subtotal</th>
+          <tr style="border-bottom:2px solid #1e3a5f">
+            <th style="padding:8px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#1e3a5f;font-weight:700">Descripción del Servicio</th>
+            <th style="padding:8px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#1e3a5f;font-weight:700;width:55px">Cant.</th>
+            <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#1e3a5f;font-weight:700;width:130px">Precio Unit.</th>
+            <th style="padding:8px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#1e3a5f;font-weight:700;width:130px">Subtotal</th>
           </tr>
         </thead>
-        <tbody>${lineas}</tbody>
+        <tbody>
+          ${lineas}
+          ${ultimaFila}
+        </tbody>
       </table>
     </div>
 
-    <!-- Totales -->
-    <div style="padding:0 40px 24px;display:flex;justify-content:flex-end">
-      <div style="width:280px">
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #e5e7eb;font-size:14px">
-          <span style="color:#6b7280">Subtotal sin ISV</span>
-          <span style="font-family:monospace">${fmt(factura.subtotal)}</span>
+    <!-- Totales SAR + Banco -->
+    <div style="padding:16px 40px 24px;display:flex;justify-content:space-between;align-items:flex-start;gap:24px">
+
+      <!-- Info bancaria -->
+      <div style="border:1px solid #e5e7eb;border-radius:6px;padding:12px 16px;font-size:12px;min-width:200px">
+        <p style="margin:0 0 6px;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;font-weight:600">Datos Bancarios</p>
+        <p style="margin:0;font-weight:700;color:#374151">${EMPRESA.banco.nombre}</p>
+        <p style="margin:2px 0;color:#6b7280">Cuenta #${EMPRESA.banco.cuenta}</p>
+        <p style="margin:0;color:#6b7280">Tipo: ${EMPRESA.banco.tipo}</p>
+      </div>
+
+      <!-- Totales SAR -->
+      <div style="min-width:260px">
+        ${row("Sub-Total", factura.subtotal)}
+        ${row("Descuento", 0)}
+        ${row("Impt. Exento", 0)}
+        ${row("Impt. Gravado", gravado)}
+        ${row("Impt. Exonerado", 0)}
+        ${row("Impuesto 15%", factura.isv)}
+        <div style="display:flex;justify-content:space-between;padding:9px 12px;background:#1e3a5f;border-radius:5px;margin-top:6px">
+          <span style="color:#fff;font-weight:700;font-size:14px">Total</span>
+          <span style="color:#fff;font-family:monospace;font-weight:700;font-size:14px">${fmt(factura.total)}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px">
-          <span style="color:#6b7280">ISV (15%)</span>
-          <span style="font-family:monospace">${fmt(factura.isv)}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;padding:12px 16px;background:#111827;border-radius:8px;margin-top:4px">
-          <span style="color:#fff;font-weight:700;font-size:15px">Total a Pagar</span>
-          <span style="color:#fff;font-family:monospace;font-weight:700;font-size:15px">${fmt(factura.total)}</span>
-        </div>
+        ${factura.tasaCambio ? `<p style="margin:6px 0 0;font-size:10px;text-align:right;color:#9ca3af">Tasa BCH: L.${factura.tasaCambio.toFixed(4)}/USD</p>` : ""}
       </div>
     </div>
 
+    ${factura.notas ? `
+    <div style="padding:0 40px 20px">
+      <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#9ca3af;font-weight:600">Notas</p>
+      <p style="margin:0;font-size:13px;color:#374151">${factura.notas.replace(/\n/g, "<br>")}</p>
+    </div>` : ""}
+
     <!-- Footer -->
-    <div style="padding:20px 40px;background:#f8fafc;border-top:1px solid #e5e7eb">
-      <p style="margin:0;font-size:13px;font-weight:700;text-align:center;color:#111827;letter-spacing:.5px;text-transform:uppercase">
+    <div style="padding:14px 40px;background:#f8f9fb;border-top:1px solid #e5e7eb;text-align:center">
+      <p style="margin:0;font-size:12px;font-weight:700;color:#1e3a5f;letter-spacing:.5px;text-transform:uppercase">
         LA FACTURA ES BENEFICIO DE TODOS EXÍJALA
       </p>
-      ${factura.tasaCambio ? `<p style="margin:8px 0 0;font-size:11px;text-align:center;color:#9ca3af">Tasa de cambio BCH: L.${factura.tasaCambio.toFixed(4)}/USD</p>` : ""}
-      <p style="margin:12px 0 0;font-size:11px;text-align:center;color:#9ca3af">
+      <p style="margin:8px 0 0;font-size:10px;color:#9ca3af">
         ${EMPRESA.nombre} · RTN ${EMPRESA.rtn} · ${EMPRESA.correo} · Tel: ${EMPRESA.telefono}
-      </p>
-      <p style="margin:6px 0 0;font-size:10px;text-align:center;color:#cbd5e1">
-        Sistema de Facturación desarrollado por DB Consulting © ${new Date().getFullYear()}
       </p>
     </div>
   </div>

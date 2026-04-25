@@ -12,7 +12,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Factura, Cliente } from "@/lib/types";
 import { formatLempiras, formatFecha, MESES_CORTO, MESES_LARGO } from "@/lib/utils";
-import { ArrowLeft, TrendingUp, CheckCircle, Clock, FileText, FileSpreadsheet, FileDown } from "lucide-react";
+import { EMPRESA } from "@/lib/empresa";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { enviarEstadoCuenta } from "@/lib/actions/email";
+import { ArrowLeft, TrendingUp, CheckCircle, Clock, FileText, FileSpreadsheet, FileDown, Send, XCircle, User } from "lucide-react";
 
 const MESES_NOMBRES = MESES_LARGO;
 
@@ -83,6 +90,16 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
 
   const [mesFiltro, setMesFiltro] = useState<number | null>(null);
 
+  // Estado de Cuenta
+  const [clienteEstadoId, setClienteEstadoId] = useState<string>("");
+  const [modalEmailEstado, setModalEmailEstado] = useState(false);
+  const [emailParaEstado, setEmailParaEstado] = useState("");
+  const [emailAsuntoEstado, setEmailAsuntoEstado] = useState("");
+  const [emailMensajeEstado, setEmailMensajeEstado] = useState("");
+  const [enviandoEstado, setEnviandoEstado] = useState(false);
+  const [resultadoEstado, setResultadoEstado] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [exportandoEstado, setExportandoEstado] = useState(false);
+
   const facturasMes = useMemo(() => {
     if (mesFiltro === null) return [];
     return activas
@@ -99,6 +116,75 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
       .sort((a, b) => b.fecha.localeCompare(a.fecha)),
     [activas, año]
   );
+
+  const clienteEstado = clienteEstadoId ? clientes.find((c) => c.id === clienteEstadoId) ?? null : null;
+  const facturasEstado = useMemo(
+    () => clienteEstadoId
+      ? facturas.filter((f) => f.clienteId === clienteEstadoId && f.estado !== "anulada").sort((a, b) => b.fecha.localeCompare(a.fecha))
+      : [],
+    [facturas, clienteEstadoId]
+  );
+  const estadoTotalFacturado = facturasEstado.reduce((s, f) => s + f.total, 0);
+  const estadoTotalCobrado = facturasEstado.filter((f) => f.estado === "pagada").reduce((s, f) => s + f.total, 0);
+  const estadoTotalPendiente = facturasEstado.filter((f) => f.estado === "emitida").reduce((s, f) => s + f.total, 0);
+
+  function abrirEmailEstado() {
+    if (!clienteEstado) return;
+    const correos = [clienteEstado.correo, clienteEstado.correo2, clienteEstado.correo3].filter(Boolean).join(", ");
+    setEmailParaEstado(correos);
+    setEmailAsuntoEstado(`Estado de Cuenta — ${clienteEstado.nombre}`);
+    setEmailMensajeEstado(`Estimado(a) ${clienteEstado.nombre},\n\nAdjunto encontrará su estado de cuenta actualizado con el detalle de facturas emitidas.\n\nPara cualquier consulta, no dude en contactarnos.\n\nAtentamente,\n${EMPRESA.nombre}`);
+    setResultadoEstado(null);
+    setModalEmailEstado(true);
+  }
+
+  async function enviarCorreoEstado() {
+    if (!clienteEstado || !emailParaEstado.trim()) return;
+    setEnviandoEstado(true);
+    setResultadoEstado(null);
+    try {
+      let pdfBase64: string | undefined;
+      try {
+        const { generarHtmlEstadoCuenta } = await import("@/lib/email/estado-cuenta-html");
+        const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
+        pdfBase64 = await pdfBase64FromHtml(generarHtmlEstadoCuenta(clienteEstado, facturasEstado));
+      } catch { /* sin adjunto */ }
+      const res = await enviarEstadoCuenta(clienteEstado, facturasEstado, emailParaEstado.trim(), emailAsuntoEstado, emailMensajeEstado, pdfBase64);
+      setResultadoEstado({ ok: res.ok, msg: res.ok ? (pdfBase64 ? "Correo enviado con PDF adjunto" : "Correo enviado") : res.error || "Error al enviar" });
+      if (res.ok) setTimeout(() => setModalEmailEstado(false), 2000);
+    } catch (e) {
+      setResultadoEstado({ ok: false, msg: (e as Error).message });
+    } finally {
+      setEnviandoEstado(false);
+    }
+  }
+
+  async function exportarPDFEstado() {
+    if (!clienteEstado) return;
+    setExportandoEstado(true);
+    let iframe: HTMLIFrameElement | null = null;
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const { jsPDF } = await import("jspdf");
+      const { generarHtmlEstadoCuenta } = await import("@/lib/email/estado-cuenta-html");
+      iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;left:-9999px;top:0;width:794px;height:1200px;border:none;";
+      document.body.appendChild(iframe);
+      await new Promise<void>((resolve) => { iframe!.onload = () => resolve(); iframe!.srcdoc = generarHtmlEstadoCuenta(clienteEstado, facturasEstado); setTimeout(resolve, 1500); });
+      const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
+      if (!iframeDoc) throw new Error("No se pudo acceder al documento");
+      const canvas = await html2canvas(iframeDoc.body, { scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false, windowWidth: 794 });
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, pdfW, (canvas.height * pdfW) / canvas.width);
+      pdf.save(`Estado-Cuenta-${clienteEstado.nombre.replace(/\s+/g, "-")}.pdf`);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (iframe?.parentNode) iframe.parentNode.removeChild(iframe);
+      setExportandoEstado(false);
+    }
+  }
 
   async function exportarExcel() {
     setExportando("excel");
@@ -491,6 +577,133 @@ export default function ReportesClient({ facturas, clientes }: { facturas: Factu
           )}
         </CardContent>
       </Card>
+
+      {/* Estado de Cuenta por Cliente */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <User className="h-4 w-4" />
+            Estado de Cuenta por Cliente
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1 max-w-xs">
+            <Label className="text-xs">Seleccionar cliente</Label>
+            <Select value={clienteEstadoId} onValueChange={(v) => setClienteEstadoId(v ?? "")}>
+              <SelectTrigger>
+                <SelectValue placeholder="Elegir cliente..." />
+              </SelectTrigger>
+              <SelectContent>
+                {clientes.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.nombre}{c.codigo ? ` (${c.codigo})` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {clienteEstado && (
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={exportarPDFEstado} disabled={exportandoEstado || facturasEstado.length === 0}>
+                  <FileDown className="h-4 w-4 mr-1 text-red-400" />
+                  {exportandoEstado ? "Generando..." : "Descargar PDF"}
+                </Button>
+                <Button variant="outline" size="sm" onClick={abrirEmailEstado} disabled={facturasEstado.length === 0}>
+                  <Send className="h-4 w-4 mr-1" />
+                  Enviar por Correo
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="border rounded-lg p-3 text-center">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Facturado</p>
+                  <p className="font-mono font-bold text-sm mt-1">{formatLempiras(estadoTotalFacturado)}</p>
+                </div>
+                <div className="border rounded-lg p-3 text-center bg-green-50/5 border-green-800/20">
+                  <p className="text-xs text-green-400 uppercase tracking-wide">Cobrado</p>
+                  <p className="font-mono font-bold text-sm text-green-400 mt-1">{formatLempiras(estadoTotalCobrado)}</p>
+                </div>
+                <div className="border rounded-lg p-3 text-center bg-yellow-50/5 border-yellow-800/20">
+                  <p className="text-xs text-yellow-400 uppercase tracking-wide">Pendiente</p>
+                  <p className="font-mono font-bold text-sm text-yellow-400 mt-1">{formatLempiras(estadoTotalPendiente)}</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {facturasEstado.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Sin facturas para este cliente</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Número</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Concepto</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {facturasEstado.map((f) => (
+                      <TableRow key={f.id}>
+                        <TableCell className="font-mono text-xs">
+                          <Link href={`/facturas/${f.id}`} className="hover:underline">{f.numero}</Link>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatFecha(f.fecha)}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{f.nombreProyecto || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={f.estado === "pagada" ? "outline" : f.estado === "anulada" ? "destructive" : f.estado === "emitida" ? "default" : "secondary"}>
+                            {f.estado}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-sm">{formatLempiras(f.total)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dialog email estado de cuenta */}
+      <Dialog open={modalEmailEstado} onOpenChange={(o) => { setModalEmailEstado(o); setResultadoEstado(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enviar Estado de Cuenta</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Para *</Label>
+              <Input type="text" value={emailParaEstado} onChange={(e) => setEmailParaEstado(e.target.value)} placeholder="correo@cliente.com" />
+              <p className="text-xs text-muted-foreground">Puede separar varios correos con coma</p>
+            </div>
+            <div className="space-y-1">
+              <Label>Asunto</Label>
+              <Input value={emailAsuntoEstado} onChange={(e) => setEmailAsuntoEstado(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Mensaje</Label>
+              <Textarea value={emailMensajeEstado} onChange={(e) => setEmailMensajeEstado(e.target.value)} rows={5} />
+            </div>
+            {resultadoEstado && (
+              <div className={`flex items-center gap-2 text-sm p-3 rounded-lg ${resultadoEstado.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
+                {resultadoEstado.ok ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                {resultadoEstado.msg}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalEmailEstado(false)}>Cancelar</Button>
+            <Button onClick={enviarCorreoEstado} disabled={!emailParaEstado.trim() || enviandoEstado}>
+              <Send className="h-4 w-4 mr-1" />
+              {enviandoEstado ? "Enviando..." : "Enviar con PDF"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Tabla mensual detallada */}
       <Card>

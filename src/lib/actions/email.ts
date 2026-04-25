@@ -1,10 +1,11 @@
 "use server";
 
 import { Resend } from "resend";
-import { Factura, Cotizacion } from "@/lib/types";
+import { Factura, Cotizacion, Cliente } from "@/lib/types";
 import { EMPRESA } from "@/lib/empresa";
 import { generarHtmlFactura } from "@/lib/email/factura-html";
 import { generarHtmlCotizacion } from "@/lib/email/cotizacion-html";
+import { generarHtmlEstadoCuenta } from "@/lib/email/estado-cuenta-html";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -13,9 +14,14 @@ export interface EnvioResult {
   error?: string;
 }
 
+function toArray(para: string | string[]): string[] {
+  if (Array.isArray(para)) return para.filter(Boolean);
+  return para.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 export async function enviarFactura(
   factura: Factura,
-  para: string,
+  para: string | string[],
   asunto: string,
   mensaje: string,
   pdfBase64?: string
@@ -28,7 +34,7 @@ export async function enviarFactura(
 
     const { error } = await resend.emails.send({
       from: `${EMPRESA.nombre} <onboarding@resend.dev>`,
-      to: [para],
+      to: toArray(para),
       subject: asunto,
       html: cuerpo,
       attachments: pdfBase64
@@ -45,7 +51,7 @@ export async function enviarFactura(
 
 export async function enviarCotizacion(
   cotizacion: Cotizacion,
-  para: string,
+  para: string | string[],
   asunto: string,
   mensaje: string,
   pdfBase64?: string
@@ -58,7 +64,7 @@ export async function enviarCotizacion(
 
     const { error } = await resend.emails.send({
       from: `${EMPRESA.nombre} <onboarding@resend.dev>`,
-      to: [para],
+      to: toArray(para),
       subject: asunto,
       html: cuerpo,
       attachments: pdfBase64
@@ -75,7 +81,7 @@ export async function enviarCotizacion(
 
 export async function enviarFacturasAgrupadas(
   facturas: Factura[],
-  para: string,
+  para: string | string[],
   asunto: string,
   mensaje: string,
   pdfs?: { filename: string; content: string }[]
@@ -98,10 +104,41 @@ export async function enviarFacturasAgrupadas(
 
     const { error } = await resend.emails.send({
       from: `${EMPRESA.nombre} <onboarding@resend.dev>`,
-      to: [para],
+      to: toArray(para),
       subject: asunto,
       html: cuerpo,
       attachments: pdfs?.length ? pdfs : undefined,
+    });
+
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+export async function enviarEstadoCuenta(
+  cliente: Cliente,
+  facturas: Factura[],
+  para: string | string[],
+  asunto: string,
+  mensaje: string,
+  pdfBase64?: string
+): Promise<EnvioResult> {
+  try {
+    const html = generarHtmlEstadoCuenta(cliente, facturas);
+    const cuerpo = mensaje.trim()
+      ? `<p style="font-family:Arial,sans-serif;color:#374151;margin-bottom:24px">${mensaje.replace(/\n/g, "<br>")}</p>${html}`
+      : html;
+
+    const { error } = await resend.emails.send({
+      from: `${EMPRESA.nombre} <onboarding@resend.dev>`,
+      to: toArray(para),
+      subject: asunto,
+      html: cuerpo,
+      attachments: pdfBase64
+        ? [{ filename: `Estado-Cuenta-${cliente.nombre.replace(/\s+/g, "-")}.pdf`, content: pdfBase64 }]
+        : undefined,
     });
 
     if (error) return { ok: false, error: error.message };

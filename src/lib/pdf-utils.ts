@@ -9,10 +9,11 @@ export async function pdfBase64FromHtml(html: string): Promise<string> {
   document.body.appendChild(iframe);
 
   try {
-    await new Promise<void>((resolve) => {
-      iframe.onload = () => resolve();
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, 1500);
+      iframe.onload = () => { clearTimeout(timer); resolve(); };
+      iframe.onerror = () => { clearTimeout(timer); reject(new Error("Error cargando el documento")); };
       iframe.srcdoc = html;
-      setTimeout(resolve, 700);
     });
 
     const iframeDoc = iframe.contentDocument ?? iframe.contentWindow?.document;
@@ -21,7 +22,7 @@ export async function pdfBase64FromHtml(html: string): Promise<string> {
     const canvas = await html2canvas(iframeDoc.body, {
       scale: 2,
       useCORS: true,
-      backgroundColor: "#f8fafc",
+      backgroundColor: "#ffffff",
       logging: false,
       windowWidth: 794,
     });

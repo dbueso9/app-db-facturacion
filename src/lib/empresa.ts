@@ -16,6 +16,7 @@ export const EMPRESA = {
   secuenciaInicio: 101,
   secuenciaFin: 150,
   isv: 0.15,
+  banco: { nombre: "BAC Credomatic", cuenta: "200296096", tipo: "Ahorro" },
 } as const;
 
 export function formatNumeroFactura(secuencia: number): string {

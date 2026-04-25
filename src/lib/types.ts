@@ -5,6 +5,8 @@ export interface Cliente {
   rtn: string;
   direccion: string;
   correo: string;
+  correo2?: string;
+  correo3?: string;
   telefono: string;
   creadoEn: string;
 }
