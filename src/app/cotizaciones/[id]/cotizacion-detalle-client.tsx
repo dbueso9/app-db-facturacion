@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
+import { generarBodyCotizacion, generarHtmlCotizacion } from "@/lib/email/cotizacion-html";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,12 +24,6 @@ import { formatDolares, formatLempiras, formatFecha, generarId } from "@/lib/uti
 import { EMPRESA } from "@/lib/empresa";
 import { ArrowLeft, Pencil, Trash2, Zap, FileText, AlertCircle, Download, Send, CheckCircle, XCircle, Layers, Plus } from "lucide-react";
 import { jsPDF } from "jspdf";
-
-function formatValidezDestacado(fecha: string): string {
-  const d = new Date(fecha + "T00:00:00");
-  const mes = d.toLocaleString("es-HN", { month: "long" }).toUpperCase();
-  return `${d.getDate()} DE ${mes} DE ${d.getFullYear()}`;
-}
 
 const BADGE_ESTADO: Record<EstadoCotizacion, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   borrador: { label: "Borrador", variant: "secondary" },
@@ -144,7 +138,6 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
     let iframe: HTMLIFrameElement | null = null;
     try {
       const html2canvas = (await import("html2canvas")).default;
-      const { generarHtmlCotizacion } = await import("@/lib/email/cotizacion-html");
       const logoUrl = `${window.location.origin}/Logo DB.png`;
 
       iframe = document.createElement("iframe");
@@ -161,14 +154,13 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
       if (!iframeDoc) throw new Error("No se pudo acceder al documento");
 
       const canvas = await html2canvas(iframeDoc.body, {
-        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false, windowWidth: 794,
+        scale: 1.5, useCORS: true, backgroundColor: "#ffffff", logging: false, windowWidth: 794,
       });
 
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = (canvas.height * pdfW) / canvas.width;
-      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.82), "JPEG", 0, 0, pdfW, pdfH);
       const partes = [cotizacion.numero, cotizacion.cliente.nombre, cotizacion.fecha]
         .map((s) => s.replace(/[/\\?%*:|"<>]/g, "-").trim());
       pdf.save(`${partes.join(" - ")}.pdf`);
@@ -226,7 +218,6 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
     try {
       let pdfBase64: string | undefined;
       try {
-        const { generarHtmlCotizacion } = await import("@/lib/email/cotizacion-html");
         const { pdfBase64FromHtml } = await import("@/lib/pdf-utils");
         const logoUrl = `${window.location.origin}/Logo DB.png`;
         pdfBase64 = await pdfBase64FromHtml(generarHtmlCotizacion(cotizacion, logoUrl));
@@ -333,170 +324,21 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
         </div>
       )}
 
-      {/* Documento previsualización */}
-      <div id="cotizacion-documento" className="bg-white text-black max-w-3xl mx-auto p-10 shadow-lg print:shadow-none print:p-6 rounded-lg">
-
-        {/* Encabezado empresa */}
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex items-center gap-4">
-            <Image src="/Logo DB.png" alt="DB Consulting" width={64} height={64} className="rounded-lg object-contain flex-shrink-0" />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{EMPRESA.nombre}</h1>
-              <p className="text-sm text-gray-600">{EMPRESA.direccion}</p>
-              <p className="text-sm text-gray-600">Tel: {EMPRESA.telefono}</p>
-              <p className="text-sm text-gray-600">{EMPRESA.correo}</p>
-              <p className="text-sm text-gray-600 font-mono">RTN: {EMPRESA.rtn}</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <h2 className="text-2xl font-bold text-gray-900">COTIZACIÓN</h2>
-            <p className="text-sm font-mono text-gray-600 mt-1">{cotizacion.numero}</p>
-            <div className="print:hidden mt-2">
-              <Badge variant={estado.variant}>{estado.label}</Badge>
-            </div>
-          </div>
-        </div>
-
-        {/* Fechas y cliente */}
-        <div className="grid grid-cols-2 gap-6 mb-4 text-sm border border-gray-200 rounded-lg p-3">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Fecha de Emisión</p>
-            <p className="font-semibold text-gray-900">{formatFecha(cotizacion.fecha)}</p>
-          </div>
-          <div className="space-y-1 text-right">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Válida Hasta</p>
-            <p className="font-semibold text-gray-900">{formatFecha(cotizacion.fechaValidez)}</p>
-          </div>
-        </div>
-
-        {/* Datos del cliente */}
-        <div className="border border-gray-200 rounded-lg p-3 mb-5 text-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Para</p>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Nombre / Razón Social</p>
-              <p className="font-bold text-gray-900 mt-0.5">{cotizacion.cliente.nombre}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">RTN</p>
-              <p className="font-mono font-semibold text-gray-900 mt-0.5">
-                {cotizacion.cliente.rtn || <span className="text-gray-400 italic text-xs">Sin RTN</span>}
-              </p>
-            </div>
-            {cotizacion.cliente.direccion && (
-              <div className="col-span-2">
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Dirección</p>
-                <p className="text-gray-800 mt-0.5">{cotizacion.cliente.direccion}</p>
-              </div>
-            )}
-            {cotizacion.cliente.correo && (
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Correo</p>
-                <p className="text-gray-800 mt-0.5">{cotizacion.cliente.correo}</p>
-              </div>
-            )}
-            {cotizacion.cliente.telefono && (
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Teléfono</p>
-                <p className="text-gray-800 mt-0.5">{cotizacion.cliente.telefono}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tabla de servicios */}
-        <table className="w-full text-sm mb-5 table-fixed">
-          <colgroup>
-            <col className="w-[48%]" />
-            <col className="w-[10%]" />
-            <col className="w-[21%]" />
-            <col className="w-[21%]" />
-          </colgroup>
-          <thead>
-            <tr className="bg-gray-100 border-b-2 border-gray-800">
-              <th className="text-left py-2 px-2 font-semibold text-gray-700">Descripción del Servicio</th>
-              <th className="text-center py-2 px-2 font-semibold text-gray-700">Cant.</th>
-              <th className="text-right py-2 px-2 font-semibold text-gray-700">Precio Unit. (USD)</th>
-              <th className="text-right py-2 px-2 font-semibold text-gray-700">Subtotal (USD)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cotizacion.nombreProyecto && (
-              <tr className="bg-[#f0f4f8]">
-                <td className="py-2 px-3 font-bold italic text-[#1e3a5f] text-sm border-b border-gray-200">{cotizacion.nombreProyecto}</td>
-                <td colSpan={3} className="border-b border-gray-200 bg-[#f0f4f8]" />
-              </tr>
-            )}
-            {cotizacion.lineas.map((l) => (
-              <tr key={l.id} className="border-b border-gray-100">
-                <td className="py-2 px-2 text-gray-800">{l.descripcion}</td>
-                <td className="py-2 px-2 text-center text-gray-600">{l.cantidad}</td>
-                <td className="py-2 px-2 text-right font-mono text-gray-700">{formatDolares(l.precioUnitario)}</td>
-                <td className="py-2 px-2 text-right font-mono font-medium">{formatDolares(l.subtotal)}</td>
-              </tr>
-            ))}
-            <tr className="border-b border-gray-100">
-              <td colSpan={4} className="py-1.5 px-2 text-center text-xs text-gray-400 italic tracking-wide">— Última Fila —</td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* Totales */}
-        <div className="flex justify-end mb-5">
-          <div className="w-72 text-sm border border-gray-200 rounded-lg overflow-hidden">
-            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
-              <span className="text-gray-600">Sub-Total</span>
-              <span className="font-mono">{formatDolares(cotizacion.subtotal)}</span>
-            </div>
-            {descuento > 0 && (
-              <>
-                <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
-                  <span className="text-gray-600">Descuento</span>
-                  <span className="font-mono text-red-600">-{formatDolares(descuento)}</span>
-                </div>
-                <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
-                  <span className="text-gray-600">Importe Gravado</span>
-                  <span className="font-mono">{formatDolares(gravado)}</span>
-                </div>
-              </>
-            )}
-            <div className="flex justify-between px-4 py-1.5 border-b border-gray-100">
-              <span className="text-gray-600">ISV (15%)</span>
-              <span className="font-mono">{formatDolares(cotizacion.isv)}</span>
-            </div>
-            <div className="flex justify-between px-4 py-3 bg-[#1e3a5f] text-white font-bold text-base">
-              <span>Total (USD)</span>
-              <span className="font-mono">{formatDolares(cotizacion.total)}</span>
-            </div>
-          </div>
-        </div>
-
+      {/* Documento — mismo HTML que email/PDF para consistencia perfecta */}
+      <div className="bg-[#dde3ea] py-6 rounded-xl overflow-auto print:bg-white print:py-0 print:rounded-none">
+        <div
+          style={{ margin: "0 auto", boxShadow: "0 4px 24px rgba(0,0,0,.14)", borderRadius: 8, overflow: "hidden", width: 794 }}
+          className="print:shadow-none print:rounded-none"
+          dangerouslySetInnerHTML={{ __html: generarBodyCotizacion(cotizacion, "/Logo DB.png") }}
+        />
+      </div>
+      <div className="print:hidden mt-3 flex justify-center gap-3 flex-wrap items-center">
+        <Badge variant={estado.variant} className="text-sm px-3 py-1">{estado.label}</Badge>
         {tasaCambio && (
-          <p className="text-xs text-right text-gray-500 -mt-3 mb-4">
-            Equiv. aprox. <span className="font-medium text-gray-700">{montoLPS}</span> · Tasa BCH L.{tasaCambio.venta.toFixed(4)}
-          </p>
+          <span className="text-xs text-muted-foreground">
+            Equiv. aprox. <span className="font-medium">{montoLPS}</span> · Tasa BCH L.{tasaCambio.venta.toFixed(4)}
+          </span>
         )}
-
-        {cotizacion.notas && (
-          <>
-            <Separator className="mb-3" />
-            <div className="mb-4">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold mb-1">Notas</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap">{cotizacion.notas}</p>
-            </div>
-          </>
-        )}
-
-        {/* Vigencia */}
-        <div className="text-xs text-center font-bold text-gray-800 border border-gray-800 rounded px-3 py-2 mb-2 uppercase tracking-wide">
-          ESTA COTIZACIÓN ES VÁLIDA HASTA EL {formatValidezDestacado(cotizacion.fechaValidez)}
-        </div>
-        <p className="text-xs text-center text-gray-500 italic mb-4">Los precios están sujetos a cambio.</p>
-
-        {/* Footer */}
-        <div className="text-xs text-gray-500 border-t border-gray-300 pt-3 text-center">
-          <p>{EMPRESA.nombre} · RTN {EMPRESA.rtn} · {EMPRESA.correo} · Tel: {EMPRESA.telefono}</p>
-        </div>
       </div>
 
       {/* Dialog convertir */}
