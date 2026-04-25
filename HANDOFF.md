@@ -1,7 +1,7 @@
 # HANDOFF — DB Consulting Facturación
 
 ## Estado actual (2026-04-24)
-App de facturación en producción — Fase 11: Servicios Recurrentes, gestión de usuarios con roles, exportación de reportes (Excel/PDF), nueva factura con opción de proyecto, tipo soporte añadido.
+App de facturación en producción — Fase 11 completa + auditoría ESLint. Commit 5b103f6.
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
@@ -364,6 +364,14 @@ SUPABASE_SERVICE_ROLE_KEY=...
 - [ ] Configurar dominio `dbconsulting.hn` en Resend (agregar 3 registros DNS) y cambiar `from` en `src/lib/actions/email.ts`
 - ✅ `user_metadata` verificado — admin y asistente ya tenían metadata correcta (`node scripts/update-user-metadata.mjs`)
 
+### Auditoría ESLint (2026-04-24) — 0 errores, 7 warnings intencionados
+- ✅ `contratos-client.tsx` — escapar comillas en JSX
+- ✅ `usuarios-client.tsx` — eliminar import `Badge` sin usar
+- ✅ `cotizaciones-client.tsx` — eliminar import `CardTitle` sin usar
+- ✅ `clientes-client.tsx` / `servicios-client.tsx` — eslint-disable en `useEffect` sync (patrón intencional App Router)
+- ✅ `cliente-detalle-client.tsx` — ternario-como-statement → if/else
+- ✅ `facturas/nueva/nueva-client.tsx` — eliminar datalists huérfanos + simplificar `generarId` en hitos
+
 ---
 
 ## Cómo retomar desarrollo
@@ -446,3 +454,4 @@ git push  # Vercel despliega automáticamente a producción desde main
 | Fase 11: Navbar Contratos + Admin links | 2026-04-24 | ✅ |
 | Fase 11: Rol gestion oculta botones de acción | 2026-04-24 | ✅ |
 | Build TypeScript Fase 11 — 0 errores | 2026-04-24 | ✅ |
+| Auditoría ESLint completa — 4 errores corregidos | 2026-04-24 | ✅ |
