@@ -1,7 +1,33 @@
 # HANDOFF — DB Consulting Facturación
 
-## Estado actual (2026-04-25)
-App de facturación en producción — Fase 15 completa. Layout A4 completo vía dangerouslySetInnerHTML; factura y cotización idénticas en pantalla/email/PDF.
+## Estado actual (2026-04-25) — SNAPSHOT COMPLETO PARA RETOMAR
+
+**Último commit:** `76e782b` — todo en `main`, Vercel desplegando automáticamente.  
+**Build:** `npm run build` → ✅ 0 errores TypeScript, 0 errores ESLint críticos.  
+**Fases:** 1–15 completas y en producción.
+
+### Resumen de lo que funciona HOY
+| Módulo | Estado |
+|--------|--------|
+| Autenticación (admin/asistente/gestion) | ✅ |
+| Dashboard con métricas + gráficas | ✅ |
+| Facturas (CRUD, SAR completo, PDF, email con PDF adjunto) | ✅ |
+| Cotizaciones USD (CRUD, PDF, email, convertir a factura/contrato) | ✅ |
+| Clientes (CRUD, RTN, código DBC-XXX, 3 correos, teléfono) | ✅ |
+| Contratos recurrentes + facturación rápida | ✅ |
+| Hitos de proyecto (% por hito, facturar por hito, barra progreso) | ✅ |
+| Tasa de cambio BCH (Excel online, cache 1h) | ✅ |
+| Reportes (año, cliente, exportar Excel + PDF) | ✅ |
+| Estado de cuenta por cliente (email + PDF) | ✅ |
+| Admin usuarios (crear/editar/eliminar roles) | ✅ |
+| Descuento en facturas y cotizaciones | ✅ |
+| Email 413 fix (bodySizeLimit 4mb, PDF JPEG 82%) | ✅ |
+| Documento A4 idéntico en pantalla/email/PDF | ✅ |
+
+### Pendiente de acción manual (no código)
+- [ ] Configurar dominio `dbconsulting.hn` en Resend → agregar 3 registros DNS → cambiar `from` en `src/lib/actions/email.ts` de `onboarding@resend.dev` a `facturacion@dbconsulting.hn`
+
+### NO hay migraciones pendientes — base de datos 100% al día
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
