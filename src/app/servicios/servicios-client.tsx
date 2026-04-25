@@ -45,6 +45,8 @@ export default function ServiciosClient({ initialServicios }: { initialServicios
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
 
+  // Sync local state with fresh server data after router.refresh()
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setServicios(initialServicios); }, [initialServicios]);
 
   function abrir(s?: Servicio) {

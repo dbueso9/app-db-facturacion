@@ -317,7 +317,7 @@ export default function ContratosClient({
       <p className="text-xs text-muted-foreground text-center">
         Para agregar o gestionar contratos, entra al{" "}
         <Link href="/clientes" className="underline hover:text-foreground">detalle del cliente</Link>
-        {" "}→ sección "Servicios Contratados". Los proyectos con hitos se gestionan desde el mismo detalle.
+        {' → sección "Servicios Contratados". Los proyectos con hitos se gestionan desde el mismo detalle.'}
       </p>
     </div>
   );

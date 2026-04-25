@@ -228,7 +228,7 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
           const pct = parseFloat(h.porcentaje);
           const monto = Number(((sub * pct) / 100).toFixed(2));
           return {
-            id: idx === primerHitoIdx ? generarId() : generarId(),
+            id: generarId(),
             contratoId,
             nombre: h.nombre.trim(),
             porcentaje: pct,
@@ -264,11 +264,6 @@ export default function NuevaFacturaClient({ clientes, servicios, limiteAlcanzad
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {servicios.map((_, idx) => (
-        <datalist key={idx} id={`srv-list-${idx}`}>
-          {servicios.map((s) => <option key={s.id} value={s.nombre} />)}
-        </datalist>
-      ))}
       <datalist id="srv-list-new">
         {servicios.map((s) => <option key={s.id} value={s.nombre} />)}
       </datalist>

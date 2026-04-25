@@ -35,6 +35,8 @@ export default function ClientesClient({ initialClientes }: { initialClientes: C
   const [guardando, setGuardando] = useState(false);
   const [eliminando, setEliminando] = useState<string | null>(null);
 
+  // Sync local state with fresh server data after router.refresh()
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setClientes(initialClientes); }, [initialClientes]);
 
   function abrir(cliente?: Cliente) {
