@@ -1,7 +1,7 @@
 # HANDOFF — DB Consulting Facturación
 
 ## Estado actual (2026-04-24)
-App de facturación en producción — Fase 11 completa + auditoría ESLint. Commit 5b103f6.
+App de facturación en producción — Fase 12 completa. Commit 11307fb.
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
@@ -50,12 +50,13 @@ src/
 ├── lib/
 │   ├── supabase.ts             # createServerClient(), createAuthClient(), getCurrentUser()
 │   ├── email/
-│   │   ├── factura-html.ts     # Template HTML correos facturas (datos fiscales arriba)
-│   │   └── cotizacion-html.ts  # Template HTML correos cotizaciones (montos USD)
+│   │   ├── factura-html.ts       # Template HTML facturas — layout formal azul marino, Ultima Fila, SAR totals, banco ★F12
+│   │   ├── cotizacion-html.ts    # Template HTML cotizaciones — mismo esquema limpio, Ultima Fila, precios sujetos ★F12
+│   │   └── estado-cuenta-html.ts # ★ NUEVO F12: template HTML estado de cuenta por cliente
 │   ├── actions/
 │   │   ├── clientes.ts         # getClientes, getCliente, saveCliente
 │   │   ├── contratos.ts        # getContratos, saveContrato, toggleActivo
-│   │   ├── email.ts            # enviarFactura, enviarFacturasAgrupadas, enviarCotizacion
+│   │   ├── email.ts            # enviarFactura, enviarCotizacion, enviarFacturasAgrupadas, enviarEstadoCuenta ★F12 — para: string | string[]
 │   │   ├── facturas.ts         # getFacturas, getFactura, saveFactura, crearNumeroFactura
 │   │   ├── cotizaciones.ts     # getCotizaciones, getCotizacion, saveCotizacion, marcarConvertidaAContrato
 │   │   ├── hitos.ts            # getHitosForContratos, saveHitos, marcarHitoFacturado
@@ -64,8 +65,8 @@ src/
 │   │   ├── tasa-cambio.ts      # getTasaCambio() — BCH Excel, cache 1h
 │   │   └── usuarios.ts         # ★ NUEVO: getUsuarios, crearUsuario, actualizarRol, eliminarUsuario (Admin API)
 │   ├── contratos-utils.ts      # calcularMontoContrato, descripcionFacturaContrato (sin "use server")
-│   ├── empresa.ts              # Datos fiscales fijos (CAI, RTN, rangos, ISV)
-│   ├── types.ts                # TipoContrato incluye "soporte" ★
+│   ├── empresa.ts              # Datos fiscales + banco BAC Credomatic #200296096 Ahorro ★F12
+│   ├── types.ts                # Cliente tiene correo2?, correo3? ★F12; TipoContrato incluye "soporte"
 │   └── utils.ts                # formatLempiras, formatDolares, formatFecha, generarId
 ├── components/
 │   └── navbar.tsx              # Nav con Contratos + Admin (solo admin) ★
@@ -99,7 +100,8 @@ migrations (en raíz del proyecto):
 ├── migration_condicion_pago.sql    ✅ ejecutada
 ├── migration_fase6.sql             ✅ ejecutada
 ├── migration_hitos.sql             ✅ ejecutada (2026-04-23)
-└── migration_fase10.sql            ✅ ejecutada (2026-04-24)
+├── migration_fase10.sql            ✅ ejecutada (2026-04-24)
+└── migration_fase12.sql            ⚠️ PENDIENTE EJECUTAR — ALTER TABLE dbc_clientes ADD COLUMN correo2 TEXT, correo3 TEXT
 ```
 
 ---
@@ -108,7 +110,7 @@ migrations (en raíz del proyecto):
 
 | Tabla | Descripción |
 |---|---|
-| `dbc_clientes` | Clientes con RTN, código DBC-XXX, correo, teléfono (+504 XXXX-XXXX) |
+| `dbc_clientes` | Clientes con RTN, código DBC-XXX, correo / correo2 / correo3, teléfono (+504 XXXX-XXXX) — F12 |
 | `dbc_servicios` | Catálogo de servicios con precio en USD |
 | `dbc_facturas` | Facturas LPS con metodo_pago, tasa_cambio, nombre_proyecto, condicion_pago |
 | `dbc_lineas_factura` | FK CASCADE DELETE a dbc_facturas |
@@ -360,7 +362,25 @@ SUPABASE_SERVICE_ROLE_KEY=...
   - PDF (`jsPDF`): portada negra, resumen anual, tabla mensual, tabla por cliente, footer con fecha
   - Ambos con nombre de archivo `Reporte_DBConsulting_{año}.{ext}`
 
+### ✅ Fase 12 — Multi-email, Estado de Cuenta, Layout formal, SAR totals, Contrato desde Factura (2026-04-24) — commit 11307fb
+- **Clientes — 3 correos:** `correo` (obligatorio) + `correo2` + `correo3` (opcionales). Formulario actualizado con grid 2 cols para correo2/3. `migration_fase12.sql` pendiente de ejecutar.
+- **Multi-email en todos los envíos:** `enviarFactura`, `enviarCotizacion`, `enviarFacturasAgrupadas`, `enviarEstadoCuenta` aceptan `para: string | string[]`. El campo "Para" en los modales se pre-llena con todos los correos del cliente separados por coma.
+- **Bug fix enviarCorreo:** try/catch anidado alrededor de la generación del PDF. Si falla, se envía el correo sin adjunto con mensaje indicativo. Ya no queda el botón "bloqueado" sin feedback.
+- **pdf-utils.ts:** timeout 700ms → 1500ms, onerror handler, backgroundColor #fff.
+- **Layout email factura/cotización:** rediseño completo — header azul marino `#1e3a5f`, fondo blanco, borde gris suave. Sin fondo negro. Mismo esquema para ambos templates.
+- **Factura — Ultima Fila:** fila `— Ultima Fila —` en cursiva al final de la tabla de servicios (pantalla + email/PDF).
+- **Factura — Totales SAR (7 filas):** Sub-Total, Descuento, Impt. Exento, Impt. Gravado, Impt. Exonerado, Impuesto 15%, Total. Reemplaza los 2 campos anteriores.
+- **Factura — Datos bancarios:** bloque "Datos Bancarios" (BAC Credomatic / #200296096 / Ahorro) junto a los totales.
+- **empresa.ts:** `banco: { nombre: "BAC Credomatic", cuenta: "200296096", tipo: "Ahorro" }`.
+- **Cotización — Ultima Fila:** igual que factura.
+- **Cotización — Precios sujetos:** texto "Los precios están sujetos a cambio." en footer (pantalla + email/PDF).
+- **Auto-fill mensajes email:** cotización y factura pre-llenan textarea con mensaje profesional (incluye datos del banco en factura).
+- **Crear Contrato desde Factura:** botón "Crear Contrato" en toolbar de `/facturas/[id]`. Modal pre-llena nombre del proyecto, tipo de contrato, valor base = total de la factura. Redirige a perfil del cliente al crear.
+- **Estado de Cuenta — Reportes:** nueva sección en `/reportes`. Selector de cliente → tabla de todas sus facturas con totales (facturado/cobrado/pendiente). Descargar PDF + Enviar por correo con PDF adjunto y multi-email.
+- **estado-cuenta-html.ts:** template HTML formal del estado de cuenta por cliente.
+
 ### Pendiente (acciones manuales)
+- [ ] **Ejecutar `migration_fase12.sql`** en Supabase SQL Editor (agrega `correo2` y `correo3` a `dbc_clientes`)
 - [ ] Configurar dominio `dbconsulting.hn` en Resend (agregar 3 registros DNS) y cambiar `from` en `src/lib/actions/email.ts`
 - ✅ `user_metadata` verificado — admin y asistente ya tenían metadata correcta (`node scripts/update-user-metadata.mjs`)
 
