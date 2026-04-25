@@ -422,8 +422,9 @@ export default function CotizacionDetalleClient({ cotizacion, tasaCambio }: Prop
           </thead>
           <tbody>
             {cotizacion.nombreProyecto && (
-              <tr className="bg-blue-50/60">
-                <td colSpan={4} className="py-1.5 px-2 text-xs font-bold text-[#1e3a5f] tracking-wide">{cotizacion.nombreProyecto}</td>
+              <tr className="bg-[#f0f4f8]">
+                <td className="py-2 px-3 font-bold italic text-[#1e3a5f] text-sm border-b border-gray-200">{cotizacion.nombreProyecto}</td>
+                <td colSpan={3} className="border-b border-gray-200 bg-[#f0f4f8]" />
               </tr>
             )}
             {cotizacion.lineas.map((l) => (

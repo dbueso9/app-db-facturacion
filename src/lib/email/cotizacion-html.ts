@@ -38,8 +38,9 @@ export function generarHtmlCotizacion(cotizacion: Cotizacion, logoUrl?: string):
       </tr>`;
 
   const proyectoFila = cotizacion.nombreProyecto ? `
-      <tr>
-        <td colspan="4" style="padding:6px 12px;background:#f0f4f8;font-size:12px;font-weight:700;color:#1e3a5f;letter-spacing:.3px">${cotizacion.nombreProyecto}</td>
+      <tr style="background:#f0f4f8">
+        <td style="padding:6px 12px 6px 16px;font-size:12px;font-weight:700;color:#1e3a5f;border-bottom:1px solid #e5e7eb;font-style:italic;letter-spacing:.2px">${cotizacion.nombreProyecto}</td>
+        <td colspan="3" style="border-bottom:1px solid #e5e7eb;background:#f0f4f8"></td>
       </tr>` : "";
 
   return `<!DOCTYPE html>

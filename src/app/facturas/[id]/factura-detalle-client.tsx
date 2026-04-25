@@ -387,6 +387,12 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
             </tr>
           </thead>
           <tbody>
+            {factura.nombreProyecto && (
+              <tr className="bg-[#f0f4f8]">
+                <td className="py-2 px-3 font-bold italic text-[#1e3a5f] text-sm border-b border-gray-200">{factura.nombreProyecto}</td>
+                <td colSpan={3} className="border-b border-gray-200 bg-[#f0f4f8]" />
+              </tr>
+            )}
             {factura.lineas.map((l) => (
               <tr key={l.id} className="border-b border-gray-100">
                 <td className="py-2 px-2 text-gray-800">{l.descripcion}</td>
@@ -396,7 +402,7 @@ export default function FacturaDetalleClient({ factura }: { factura: Factura }) 
               </tr>
             ))}
             <tr className="border-b border-gray-100">
-              <td colSpan={4} className="py-1.5 px-2 text-center text-xs text-gray-400 italic tracking-wide">— Ultima Fila —</td>
+              <td colSpan={4} className="py-1.5 px-2 text-center text-xs text-gray-400 italic tracking-wide">— Última Fila —</td>
             </tr>
           </tbody>
         </table>
