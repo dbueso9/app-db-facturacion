@@ -2,9 +2,9 @@
 
 ## Estado actual (2026-04-25) — SNAPSHOT COMPLETO PARA RETOMAR
 
-**Último commit:** `76e782b` — todo en `main`, Vercel desplegando automáticamente.  
+**Último commit:** `6ee5298` — todo en `main`, Vercel desplegando automáticamente.  
 **Build:** `npm run build` → ✅ 0 errores TypeScript, 0 errores ESLint críticos.  
-**Fases:** 1–15 completas y en producción.
+**Fases:** 1–16 completas y en producción.
 
 ### Resumen de lo que funciona HOY
 | Módulo | Estado |
@@ -25,7 +25,7 @@
 | Documento A4 idéntico en pantalla/email/PDF | ✅ |
 
 ### Pendiente de acción manual (no código)
-- [ ] Configurar dominio `dbconsulting.hn` en Resend → agregar 3 registros DNS → cambiar `from` en `src/lib/actions/email.ts` de `onboarding@resend.dev` a `facturacion@dbconsulting.hn`
+- [ ] Configurar dominio `dbconsulting.hn` en Resend → agregar 3 registros DNS → verificar en resend.com/domains (el `from` ya está seteado a `facturacion@dbconsulting.hn` en código)
 
 ### NO hay migraciones pendientes — base de datos 100% al día
 
@@ -531,6 +531,18 @@ git push  # Vercel despliega automáticamente a producción desde main
 | Fase 14: Fix 413, PDF JPEG 80% más pequeño, soporte dashboard, UI | 2026-04-25 | ✅ |
 | Fase 15: A4 full-page layout via dangerouslySetInnerHTML | 2026-04-25 | ✅ |
 | Build TypeScript Fase 15 — 0 errores | 2026-04-25 | ✅ |
+| Fase 16: 8 bugs corregidos (email, contratos, diálogos, ortografía, orden, select) | 2026-04-25 | ✅ |
+| Build TypeScript Fase 16 — 0 errores | 2026-04-25 | ✅ |
+
+### ✅ Fase 16 — Corrección de 8 bugs reportados (2026-04-25) — commit 6ee5298
+- **#1 Email from:** `from` cambiado de `onboarding@resend.dev` a `facturacion@dbconsulting.hn` en todos los envíos (4 funciones en `email.ts`). Requiere verificar DNS en resend.com.
+- **#2 Contratos solo para recurrentes:** eliminado `proyecto_app` del selector de tipo en el diálogo "Crear Contrato". `EMPTY_CONTRATO.tipo` cambiado de `proyecto_app` → `mantenimiento`. Proyectos con hitos se crean exclusivamente desde cotizaciones o nueva factura.
+- **#3 Diálogo "Crear Contrato con Plan de Pagos":** `max-w-2xl max-h-[88vh] overflow-y-auto` en DialogContent. Hitos encapsulados en `div` con `max-h-56 overflow-y-auto`. Columnas corregidas a 5+2+4+1.
+- **#4 Ortografía:** `Sub-Total` → `Subtotal` en `factura-html.ts` y `cotizacion-html.ts`.
+- **#5 Clientes ordenados por código:** `getClientes()` usa `.order("codigo")` en lugar de `nombre`.
+- **#6 Servicios ordenados por precio:** `getServicios()` usa `.order("precio_base", { ascending: false })`.
+- **#7 Estado de cuenta — logo + Concepto centrado:** `generarHtmlEstadoCuenta()` recibe `logoUrl?` como 4° parámetro; header incluye `<img>` si se pasa; columna "Concepto" en `<th>` y `<td>` con `text-align:center`.
+- **#8 Select cliente muestra nombres:** todos los formularios (4 archivos) pasan `{field.value ? clientes.find(c=>c.id===field.value)?.nombre : undefined}` como `children` de `SelectValue`. Solución al bug de Base UI donde `Select.Value` no puede leer texto de items en portal.
 
 ### ✅ Fase 15 — A4 full-page layout, logo, colores fuertes, pantalla=email=PDF (2026-04-25) — commit dee5293
 - **`factura-html.ts` + `cotizacion-html.ts` reescritos:** layout flex-column `794px × min-height:1122px`; flex:1 spacer empuja datos bancarios y totales al fondo de la página A4
