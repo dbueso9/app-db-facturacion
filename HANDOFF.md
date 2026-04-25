@@ -1,7 +1,7 @@
 # HANDOFF — DB Consulting Facturación
 
-## Estado actual (2026-04-24)
-App de facturación en producción — Fase 12 completa. Commit 11307fb.
+## Estado actual (2026-04-25)
+App de facturación en producción — Fase 13 completa. Commit ab30757.
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
@@ -101,7 +101,8 @@ migrations (en raíz del proyecto):
 ├── migration_fase6.sql             ✅ ejecutada
 ├── migration_hitos.sql             ✅ ejecutada (2026-04-23)
 ├── migration_fase10.sql            ✅ ejecutada (2026-04-24)
-└── migration_fase12.sql            ⚠️ PENDIENTE EJECUTAR — ALTER TABLE dbc_clientes ADD COLUMN correo2 TEXT, correo3 TEXT
+├── migration_fase12.sql            ⚠️ PENDIENTE EJECUTAR — ALTER TABLE dbc_clientes ADD COLUMN correo2 TEXT, correo3 TEXT
+└── migration_descuento.sql         ⚠️ PENDIENTE EJECUTAR — ALTER TABLE dbc_facturas/dbc_cotizaciones ADD COLUMN descuento
 ```
 
 ---
@@ -379,8 +380,24 @@ SUPABASE_SERVICE_ROLE_KEY=...
 - **Estado de Cuenta — Reportes:** nueva sección en `/reportes`. Selector de cliente → tabla de todas sus facturas con totales (facturado/cobrado/pendiente). Descargar PDF + Enviar por correo con PDF adjunto y multi-email.
 - **estado-cuenta-html.ts:** template HTML formal del estado de cuenta por cliente.
 
+### ✅ Fase 13 — Campo Descuento en facturas y cotizaciones (2026-04-25) — commit ab30757
+- **`migration_descuento.sql`:** `ALTER TABLE dbc_facturas ADD COLUMN descuento NUMERIC DEFAULT 0` + idem para `dbc_cotizaciones`. ⚠️ Pendiente ejecutar.
+- **`types.ts`:** `descuento: number` agregado a `Factura` y `Cotizacion`.
+- **Actions:** `saveFactura` y `saveCotizacion` persisten `descuento`; `mapRow`/`mapFacturaRow` lo leen de BD.
+- **Email templates (`factura-html.ts`, `cotizacion-html.ts`):**
+  - Parámetro `logoUrl?` opcional — si se pasa, se muestra logo en el header.
+  - `proyectoFila` — nombre del proyecto como fila de encabezado en la tabla de servicios.
+  - "Última Fila" con acento (corregido de "Ultima Fila").
+  - Descuento en totales: línea roja visible solo cuando > 0.
+  - Layout A4 (794px, min-height 1122px), sin border-radius.
+- **`factura-detalle-client.tsx`:** Descuento y Gravado reales en totales SAR (antes hardcodeados a 0).
+- **`cotizacion-detalle-client.tsx`:** Refactor UI; conversión USD→LPS propaga el descuento correctamente al crear factura.
+- **Formularios nueva/editar (facturas y cotizaciones):** Input numérico "Descuento" en sección de totales; gravado se muestra solo cuando descuento > 0; cálculo correcto: `gravado = subtotal - descuento`, `isv = gravado × 15%`, `total = gravado + isv`.
+- **email.ts:** pasa `logoUrl` a todos los generadores de HTML.
+
 ### Pendiente (acciones manuales)
 - [ ] **Ejecutar `migration_fase12.sql`** en Supabase SQL Editor (agrega `correo2` y `correo3` a `dbc_clientes`)
+- [ ] **Ejecutar `migration_descuento.sql`** en Supabase SQL Editor (agrega `descuento` a `dbc_facturas` y `dbc_cotizaciones`)
 - [ ] Configurar dominio `dbconsulting.hn` en Resend (agregar 3 registros DNS) y cambiar `from` en `src/lib/actions/email.ts`
 - ✅ `user_metadata` verificado — admin y asistente ya tenían metadata correcta (`node scripts/update-user-metadata.mjs`)
 
