@@ -1,7 +1,7 @@
 # HANDOFF — DB Consulting Facturación
 
 ## Estado actual (2026-04-25)
-App de facturación en producción — Fase 13 completa. Commit ab30757.
+App de facturación en producción — Fase 14 completa. Fix 413 email, soporte en dashboard, UI/UX mejorado.
 
 **Producción:** https://db-consulting-facturas.vercel.app  
 **Repositorio:** https://github.com/dbueso9/app-db-facturacion
@@ -101,8 +101,8 @@ migrations (en raíz del proyecto):
 ├── migration_fase6.sql             ✅ ejecutada
 ├── migration_hitos.sql             ✅ ejecutada (2026-04-23)
 ├── migration_fase10.sql            ✅ ejecutada (2026-04-24)
-├── migration_fase12.sql            ⚠️ PENDIENTE EJECUTAR — ALTER TABLE dbc_clientes ADD COLUMN correo2 TEXT, correo3 TEXT
-└── migration_descuento.sql         ⚠️ PENDIENTE EJECUTAR — ALTER TABLE dbc_facturas/dbc_cotizaciones ADD COLUMN descuento
+├── migration_fase12.sql            ✅ ejecutada (2026-04-25) — ADD COLUMN correo2/correo3 a dbc_clientes
+└── migration_descuento.sql         ✅ ejecutada (2026-04-25) — ADD COLUMN descuento a dbc_facturas y dbc_cotizaciones
 ```
 
 ---
@@ -120,7 +120,7 @@ migrations (en raíz del proyecto):
 | `dbc_lineas_cotizacion` | FK CASCADE DELETE a dbc_cotizaciones |
 | `dbc_hitos` | Hitos de proyecto: contrato_id, nombre, porcentaje, monto, estado, factura_id, orden |
 
-**Todas las migraciones ejecutadas ✅.** RLS habilitada — solo usuarios autenticados.
+**Todas las migraciones ejecutadas ✅ (incluyendo fase12 + descuento, 2026-04-25).** RLS habilitada — solo usuarios autenticados.
 
 ---
 
@@ -396,10 +396,20 @@ SUPABASE_SERVICE_ROLE_KEY=...
 - **email.ts:** pasa `logoUrl` a todos los generadores de HTML.
 
 ### Pendiente (acciones manuales)
-- [ ] **Ejecutar `migration_fase12.sql`** en Supabase SQL Editor (agrega `correo2` y `correo3` a `dbc_clientes`)
-- [ ] **Ejecutar `migration_descuento.sql`** en Supabase SQL Editor (agrega `descuento` a `dbc_facturas` y `dbc_cotizaciones`)
 - [ ] Configurar dominio `dbconsulting.hn` en Resend (agregar 3 registros DNS) y cambiar `from` en `src/lib/actions/email.ts`
-- ✅ `user_metadata` verificado — admin y asistente ya tenían metadata correcta (`node scripts/update-user-metadata.mjs`)
+- ✅ `migration_fase12.sql` ejecutada (2026-04-25) — correo2, correo3 en dbc_clientes
+- ✅ `migration_descuento.sql` ejecutada (2026-04-25) — descuento en dbc_facturas y dbc_cotizaciones
+- ✅ `user_metadata` verificado — admin y asistente ya tenían metadata correcta
+
+### ✅ Fase 14 — Fix 413 email, soporte dashboard, UI/UX (2026-04-25)
+- **Fix error 413 al enviar correos:** `experimental.serverActions.bodySizeLimit: "4mb"` en `next.config.ts`
+- **PDF más pequeño (~80%):** `pdf-utils.ts` cambiado de PNG scale:2 → JPEG 82% scale:1.5 — evita 413 también en Resend
+- **Bug fix soporte en Dashboard:** `soporte` type añadido a `TIPO_COLOR`, `TIPO_LABEL` y array `porTipo` en `dashboard-client.tsx`
+- **Dashboard UI mejorado:** metric cards con borde izquierdo de color por tipo, icon backgrounds, progress bars, fecha actual, empty state mejorado, lista de facturas recientes con filas clicables, card de contratos con link directo
+- **Facturas list UI:** filas con borde izquierdo codificado por estado (verde=pagada, azul=emitida, rojo=anulada), mejor empty state contextual, columnas más compactas
+- **globals.css:** scrollbar personalizado discreto, animación `animate-in-fast` disponible como utilidad
+- **HANDOFF:** migraciones fase12 y descuento marcadas como ✅ ejecutadas (confirmado por usuario)
+- **Todas las migraciones ejecutadas ✅ — base de datos completamente actualizada**
 
 ### Auditoría ESLint (2026-04-24) — 0 errores, 7 warnings intencionados
 - ✅ `contratos-client.tsx` — escapar comillas en JSX

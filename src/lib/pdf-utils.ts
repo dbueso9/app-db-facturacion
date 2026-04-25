@@ -20,7 +20,7 @@ export async function pdfBase64FromHtml(html: string): Promise<string> {
     if (!iframeDoc) throw new Error("No se pudo acceder al documento del iframe");
 
     const canvas = await html2canvas(iframeDoc.body, {
-      scale: 2,
+      scale: 1.5,
       useCORS: true,
       backgroundColor: "#ffffff",
       logging: false,
@@ -30,7 +30,8 @@ export async function pdfBase64FromHtml(html: string): Promise<string> {
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pdfW = pdf.internal.pageSize.getWidth();
     const pdfH = (canvas.height * pdfW) / canvas.width;
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, pdfW, pdfH);
+    // JPEG + scale 1.5 = ~80% reducción vs PNG scale 2 — evita error 413
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.82), "JPEG", 0, 0, pdfW, pdfH);
 
     return pdf.output("datauristring").split(",")[1];
   } finally {

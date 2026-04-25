@@ -122,42 +122,54 @@ export default function FacturasClient({ initialFacturas }: { initialFacturas: F
         </CardHeader>
         <CardContent>
           {paginadas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-              <FileText className="h-12 w-12 mb-4 opacity-30" />
-              <p className="text-sm">No hay facturas</p>
+            <div className="flex flex-col items-center justify-center py-14 text-muted-foreground">
+              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-3">
+                <FileText className="h-6 w-6 opacity-40" />
+              </div>
+              <p className="text-sm font-medium">No se encontraron facturas</p>
+              <p className="text-xs mt-1 text-muted-foreground/70">
+                {busqueda || filtroEstado !== "todos" ? "Prueba ajustando los filtros" : "Crea tu primera factura"}
+              </p>
             </div>
           ) : (
             <>
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Número</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-32">Número</TableHead>
                     <TableHead>Cliente / Proyecto</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="w-32">Fecha</TableHead>
+                    <TableHead className="w-28">Estado</TableHead>
+                    <TableHead className="text-right w-36">Total (L)</TableHead>
                     <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginadas.map((f) => {
                     const estado = BADGE_ESTADO[f.estado];
+                    const rowColor = f.estado === "pagada"
+                      ? "border-l-green-500/50"
+                      : f.estado === "emitida"
+                      ? "border-l-blue-500/50"
+                      : f.estado === "anulada"
+                      ? "border-l-red-500/50 opacity-60"
+                      : "border-l-transparent";
                     return (
-                      <TableRow key={f.id}>
-                        <TableCell className="font-mono text-sm">{f.numero}</TableCell>
+                      <TableRow key={f.id} className={`border-l-2 ${rowColor} hover:bg-accent/60 transition-colors`}>
+                        <TableCell className="font-mono text-sm font-semibold">{f.numero}</TableCell>
                         <TableCell>
-                          <p className="font-medium">{f.cliente.nombre}</p>
+                          <p className="font-medium text-sm">{f.cliente.nombre}</p>
                           {f.nombreProyecto && (
-                            <p className="text-xs text-muted-foreground">{f.nombreProyecto}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{f.nombreProyecto}</p>
                           )}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">{formatFecha(f.fecha)}</TableCell>
                         <TableCell>
-                          <Badge variant={estado.variant}>{estado.label}</Badge>
+                          <Badge variant={estado.variant} className="text-xs">{estado.label}</Badge>
                         </TableCell>
-                        <TableCell className="text-right font-mono font-semibold">{formatLempiras(f.total)}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold text-sm">{formatLempiras(f.total)}</TableCell>
                         <TableCell>
-                          <Button variant="ghost" size="icon" render={<Link href={`/facturas/${f.id}`} />}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" render={<Link href={`/facturas/${f.id}`} />}>
                             <Eye className="h-4 w-4" />
                           </Button>
                         </TableCell>
